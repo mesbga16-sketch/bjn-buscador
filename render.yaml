@@ -1,0 +1,10 @@
+services:
+  - type: web
+    name: bjn-buscador
+    runtime: python
+    buildCommand: pip install -r requirements.txt && python -m playwright install chromium --with-deps
+    startCommand: python server.py
+    envVars:
+      - key: PORT
+        value: 10000
+    plan: free

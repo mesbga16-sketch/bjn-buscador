@@ -1,0 +1,801 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BJN - Buscador de Sentencias</title>
+<style>
+  :root {
+    --azul: #1a3a5c;
+    --azul-claro: #2563a8;
+    --gris: #f4f5f7;
+    --borde: #d0d7e2;
+    --texto: #1c2733;
+    --extracto: #4a5568;
+    --rojo: #c0392b;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Segoe UI', Arial, sans-serif;
+    font-size: 14px;
+    color: var(--texto);
+    background: var(--gris);
+    min-height: 100vh;
+  }
+
+  header {
+    background: var(--azul);
+    color: white;
+    padding: 14px 24px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+
+  header h1 { font-size: 18px; font-weight: 600; letter-spacing: 0.3px; }
+  header span { font-size: 12px; opacity: 0.7; }
+
+  .container { max-width: 1100px; margin: 0 auto; padding: 20px 16px; }
+
+  /* Tabs */
+  .tabs { display: flex; gap: 0; border-bottom: 2px solid var(--azul-claro); margin-bottom: 16px; }
+  .tab {
+    padding: 8px 20px;
+    cursor: pointer;
+    border: 1px solid transparent;
+    border-bottom: none;
+    border-radius: 4px 4px 0 0;
+    background: white;
+    color: var(--extracto);
+    font-size: 13px;
+    font-weight: 500;
+    transition: background 0.15s;
+  }
+  .tab.active { background: var(--azul-claro); color: white; border-color: var(--azul-claro); }
+  .tab:not(.active):hover { background: #e8f0fb; }
+
+  /* Forms */
+  .form-panel { background: white; border: 1px solid var(--borde); border-radius: 6px; padding: 18px 20px; display: none; }
+  .form-panel.active { display: block; }
+
+  .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 20px; }
+  .form-grid.single { grid-template-columns: 1fr; }
+
+  .field { display: flex; flex-direction: column; gap: 4px; }
+  .field.wide { grid-column: 1 / -1; }
+
+  label { font-size: 12px; font-weight: 600; color: var(--azul); text-transform: uppercase; letter-spacing: 0.4px; }
+
+  input[type="text"], input[type="date"], select, textarea {
+    border: 1px solid var(--borde);
+    border-radius: 4px;
+    padding: 7px 10px;
+    font-size: 14px;
+    font-family: inherit;
+    color: var(--texto);
+    background: white;
+    width: 100%;
+    transition: border-color 0.15s;
+  }
+  input:focus, select:focus, textarea:focus {
+    outline: none;
+    border-color: var(--azul-claro);
+    box-shadow: 0 0 0 2px rgba(37,99,168,0.12);
+  }
+  textarea { resize: vertical; min-height: 60px; }
+
+  .form-row { display: flex; gap: 12px; align-items: flex-end; margin-top: 14px; }
+  .form-row .field { flex: 1; }
+
+  .btn {
+    padding: 8px 22px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 600;
+    transition: opacity 0.15s;
+  }
+  .btn:hover { opacity: 0.87; }
+  .btn-primary { background: var(--azul-claro); color: white; }
+  .btn-secondary { background: #e2e8f0; color: var(--texto); }
+
+  /* Historial */
+  .history-bar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 10px;
+    min-height: 0;
+  }
+  .history-label {
+    font-size: 11px;
+    color: var(--extracto);
+    align-self: center;
+    white-space: nowrap;
+  }
+  .history-chip {
+    font-size: 11px;
+    padding: 3px 9px;
+    background: #eef2fb;
+    border: 1px solid var(--borde);
+    border-radius: 12px;
+    cursor: pointer;
+    color: var(--azul);
+    white-space: nowrap;
+    max-width: 200px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    transition: background 0.12s;
+  }
+  .history-chip:hover { background: #dde8f8; }
+  .history-chip-del {
+    margin-left: 4px;
+    opacity: 0.5;
+    font-size: 10px;
+  }
+
+  /* Results */
+  .results-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin: 18px 0 10px;
+    font-size: 13px;
+    color: var(--extracto);
+  }
+  .results-count strong { color: var(--texto); }
+
+  .result-list { display: flex; flex-direction: column; gap: 8px; }
+
+  .result-card {
+    background: white;
+    border: 1px solid var(--borde);
+    border-radius: 6px;
+    padding: 12px 16px;
+    cursor: pointer;
+    transition: border-color 0.15s, box-shadow 0.15s;
+  }
+  .result-card:hover { border-color: var(--azul-claro); box-shadow: 0 2px 6px rgba(0,0,0,0.07); }
+  .result-card.selected { border-color: var(--azul-claro); background: #f0f5ff; }
+
+  .result-meta {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    flex-wrap: wrap;
+    margin-bottom: 5px;
+  }
+  .badge {
+    font-size: 11px;
+    font-weight: 700;
+    padding: 2px 7px;
+    border-radius: 3px;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+  }
+  .badge-numero { background: var(--azul); color: white; }
+  .badge-tipo { background: #e8f0fb; color: var(--azul); }
+  .badge-tribunal { background: #f0fdf4; color: #166534; border: 1px solid #bbf7d0; }
+
+  .result-proceso { font-size: 12px; color: var(--extracto); margin-bottom: 5px; }
+  .result-extracto { font-size: 13px; color: var(--extracto); line-height: 1.5; }
+
+  /* Paginacion */
+  .pagination {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    margin-top: 16px;
+    padding: 10px 0;
+  }
+  .page-btn {
+    padding: 6px 18px;
+    border: 1px solid var(--borde);
+    border-radius: 4px;
+    background: white;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--azul-claro);
+    transition: background 0.15s, border-color 0.15s;
+  }
+  .page-btn:hover:not(:disabled) { background: #e8f0fb; border-color: var(--azul-claro); }
+  .page-btn:disabled { opacity: 0.35; cursor: default; }
+  .page-info { font-size: 12px; color: var(--extracto); min-width: 80px; text-align: center; }
+
+  /* Detail panel */
+  .detail-panel {
+    background: white;
+    border: 1px solid var(--borde);
+    border-radius: 6px;
+    padding: 20px;
+    margin-top: 16px;
+    display: none;
+  }
+  .detail-panel.active { display: block; }
+
+  .detail-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 14px;
+    gap: 12px;
+  }
+  .detail-title { font-size: 15px; font-weight: 700; color: var(--azul); }
+
+  .detail-body {
+    white-space: pre-wrap;
+    line-height: 1.8;
+    font-size: 13.5px;
+    color: var(--texto);
+    border-top: 1px solid var(--borde);
+    padding-top: 14px;
+    max-height: 70vh;
+    overflow-y: auto;
+    font-family: 'Georgia', serif;
+  }
+
+  .detail-actions {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+  .btn-icon {
+    padding: 5px 12px;
+    font-size: 12px;
+    border: 1px solid var(--borde);
+    border-radius: 4px;
+    background: white;
+    cursor: pointer;
+    color: var(--texto);
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    transition: background 0.15s;
+  }
+  .btn-icon:hover { background: #f0f5ff; border-color: var(--azul-claro); }
+  .detail-expand { font-size: 11px; color: var(--extracto); margin-top: 6px; }
+
+  /* Status */
+  .status {
+    padding: 12px 16px;
+    border-radius: 6px;
+    font-size: 13px;
+    margin-top: 14px;
+    display: none;
+  }
+  .status.loading { background: #eff6ff; color: var(--azul); border: 1px solid #bfdbfe; display: block; }
+  .status.error { background: #fef2f2; color: var(--rojo); border: 1px solid #fca5a5; display: block; }
+
+  .spinner {
+    display: inline-block;
+    width: 14px; height: 14px;
+    border: 2px solid #bfdbfe;
+    border-top-color: var(--azul-claro);
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+    margin-right: 8px;
+    vertical-align: middle;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .timer { font-size: 11px; opacity: 0.7; margin-left: 8px; }
+
+  .bjn-link {
+    font-size: 12px;
+    color: var(--azul-claro);
+    text-decoration: none;
+    border-bottom: 1px dotted var(--azul-claro);
+  }
+  .bjn-link:hover { color: var(--azul); }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>BJN - Base de Jurisprudencia Nacional</h1>
+    <span>Poder Judicial de la Rep. Oriental del Uruguay</span>
+  </div>
+  <a class="bjn-link" href="https://bjn.poderjudicial.gub.uy/" target="_blank" style="color:rgba(255,255,255,0.75); margin-left:auto; font-size:12px; text-decoration:none; border-bottom:1px dotted rgba(255,255,255,0.4);">Abrir BJN original</a>
+</header>
+
+<div class="container">
+
+  <!-- Tabs -->
+  <div class="tabs">
+    <button class="tab active" onclick="switchTab('simple')">Busqueda Simple</button>
+    <button class="tab" onclick="switchTab('selectiva')">Busqueda Selectiva</button>
+  </div>
+
+  <!-- Busqueda Simple -->
+  <div id="panel-simple" class="form-panel active">
+    <div class="form-grid single">
+      <div class="field">
+        <label>Texto a buscar</label>
+        <input type="text" id="s-texto" placeholder="ej: despido abusivo, accidente laboral..." onkeydown="if(event.key==='Enter') buscar()">
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="field">
+        <label>Tipo de busqueda</label>
+        <select id="s-tipo">
+          <option value="TODAS_LAS_PALABRAS">Todas las palabras</option>
+          <option value="FRASE_EXACTA">Frase exacta</option>
+          <option value="ALGUNA_PALABRA">Alguna de las palabras</option>
+          <option value="MAXIMIZAR_RESULTADOS">Maximizar resultados</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Ordenar por</label>
+        <select id="s-ordenar">
+          <option value="RELEVANCIA">Relevancia</option>
+          <option value="FECHA_DESCENDENTE">Fecha (mas reciente)</option>
+          <option value="FECHA_ASCENDENTE">Fecha (mas antigua)</option>
+        </select>
+      </div>
+      <button class="btn btn-primary" onclick="buscar()" style="white-space:nowrap; padding:8px 28px;">Buscar</button>
+    </div>
+    <!-- Historial simple -->
+    <div id="history-simple" class="history-bar"></div>
+  </div>
+
+  <!-- Busqueda Selectiva -->
+  <div id="panel-selectiva" class="form-panel">
+    <div class="form-grid">
+      <div class="field wide">
+        <label>Texto libre</label>
+        <textarea id="sel-texto" rows="2" placeholder="Palabras a buscar en el texto de la sentencia..."></textarea>
+      </div>
+      <div class="field">
+        <label>Fecha desde</label>
+        <input type="text" id="sel-fecha-desde" placeholder="dd/mm/aaaa">
+      </div>
+      <div class="field">
+        <label>Fecha hasta</label>
+        <input type="text" id="sel-fecha-hasta" placeholder="dd/mm/aaaa">
+      </div>
+      <div class="field">
+        <label>Numero de sentencia</label>
+        <input type="text" id="sel-numero" placeholder="ej: 96/2021">
+      </div>
+      <div class="field">
+        <label>Procedimiento</label>
+        <input type="text" id="sel-procedimiento" placeholder="ej: laboral, civil...">
+      </div>
+      <div class="field">
+        <label>Tribunal / Sede</label>
+        <input type="text" id="sel-sede" placeholder="ej: TAT 1, Juzgado Trabajo 1...">
+      </div>
+      <div class="field wide">
+        <label>Resumen / Descriptor</label>
+        <input type="text" id="sel-resumen" placeholder="palabras del resumen...">
+      </div>
+    </div>
+    <div class="form-row" style="justify-content:flex-end; margin-top:14px;">
+      <button class="btn btn-secondary" onclick="limpiarSelectiva()">Limpiar</button>
+      <button class="btn btn-primary" onclick="buscar()">Buscar</button>
+    </div>
+    <!-- Historial selectiva -->
+    <div id="history-selectiva" class="history-bar"></div>
+  </div>
+
+  <!-- Status con timer -->
+  <div id="status" class="status"></div>
+
+  <!-- Results -->
+  <div id="results-area" style="display:none;">
+    <div class="results-header">
+      <div class="results-count" id="results-count"></div>
+    </div>
+    <div class="result-list" id="result-list"></div>
+
+    <!-- Paginacion -->
+    <div class="pagination" id="pagination" style="display:none;">
+      <button class="page-btn" id="btn-prev" onclick="cambiarPagina('prev')" disabled>&#8592; Anterior</button>
+      <span class="page-info" id="page-info"></span>
+      <button class="page-btn" id="btn-next" onclick="cambiarPagina('next')" disabled>Siguiente &#8594;</button>
+    </div>
+  </div>
+
+  <!-- Detail -->
+  <div id="detail-panel" class="detail-panel">
+    <div class="detail-header">
+      <div class="detail-title" id="detail-title"></div>
+      <div class="detail-actions">
+        <button class="btn-icon" onclick="copiarTexto()" title="Copiar texto completo">&#128203; Copiar</button>
+        <button class="btn-icon" onclick="exportarTxt()" title="Descargar como archivo de texto">&#128190; Exportar .txt</button>
+        <button class="btn-icon" onclick="cerrarDetalle()">&#x2715; Cerrar</button>
+      </div>
+    </div>
+    <div class="detail-expand" id="detail-chars"></div>
+    <div class="detail-body" id="detail-body"></div>
+  </div>
+
+</div>
+
+<script>
+let modoActual     = 'simple';
+let ultimaBusqueda = null;
+let sessionId      = null;
+let paginacionActual = { hasNext: false, hasPrev: false, pageText: '' };
+let timerInterval  = null;
+let timerStart     = 0;
+
+// ─── Tabs ──────────────────────────────────────────────────────────────────
+
+function switchTab(modo) {
+  modoActual = modo;
+  document.querySelectorAll('.tab').forEach((t, i) => {
+    t.classList.toggle('active', (i === 0 && modo === 'simple') || (i === 1 && modo === 'selectiva'));
+  });
+  document.getElementById('panel-simple').classList.toggle('active', modo === 'simple');
+  document.getElementById('panel-selectiva').classList.toggle('active', modo === 'selectiva');
+}
+
+function limpiarSelectiva() {
+  ['sel-texto','sel-fecha-desde','sel-fecha-hasta','sel-numero','sel-procedimiento','sel-resumen','sel-sede']
+    .forEach(id => document.getElementById(id).value = '');
+}
+
+// ─── Status con timer ──────────────────────────────────────────────────────
+
+function setStatus(msg, tipo) {
+  const el = document.getElementById('status');
+  clearInterval(timerInterval);
+  timerInterval = null;
+
+  if (!tipo) {
+    el.className = 'status';
+    el.style.display = 'none';
+    return;
+  }
+
+  el.className = 'status ' + tipo;
+
+  if (tipo === 'loading') {
+    timerStart = Date.now();
+    const render = () => {
+      const seg = ((Date.now() - timerStart) / 1000).toFixed(0);
+      el.innerHTML = `<span class="spinner"></span>${msg}<span class="timer">(${seg}s)</span>`;
+    };
+    render();
+    timerInterval = setInterval(render, 1000);
+  } else {
+    el.innerHTML = msg;
+  }
+}
+
+// ─── Historial (localStorage) ──────────────────────────────────────────────
+
+const HIST_KEY_SIMPLE    = 'bjn_hist_simple';
+const HIST_KEY_SELECTIVA = 'bjn_hist_selectiva';
+const HIST_MAX           = 8;
+
+function histLoad(key) {
+  try { return JSON.parse(localStorage.getItem(key) || '[]'); }
+  catch { return []; }
+}
+
+function histSave(key, items) {
+  localStorage.setItem(key, JSON.stringify(items));
+}
+
+function histAdd(payload) {
+  if (payload.modo === 'simple') {
+    const texto = (payload.texto || '').trim();
+    if (!texto) return;
+    const key   = HIST_KEY_SIMPLE;
+    const items = histLoad(key).filter(i => i.texto !== texto);
+    items.unshift({ texto, tipo: payload.tipoBusqueda, ordenar: payload.ordenar, ts: Date.now() });
+    histSave(key, items.slice(0, HIST_MAX));
+    renderHistory('simple');
+  } else {
+    const label = buildSelectivaLabel(payload);
+    if (!label) return;
+    const key   = HIST_KEY_SELECTIVA;
+    const items = histLoad(key).filter(i => i.label !== label);
+    items.unshift({ label, payload: JSON.parse(JSON.stringify(payload)), ts: Date.now() });
+    histSave(key, items.slice(0, HIST_MAX));
+    renderHistory('selectiva');
+  }
+}
+
+function buildSelectivaLabel(p) {
+  const parts = [
+    p.texto, p.fechaDesde && p.fechaHasta ? `${p.fechaDesde}-${p.fechaHasta}` :
+             (p.fechaDesde || p.fechaHasta || ''),
+    p.numeroSentencia, p.procedimiento, p.sede, p.resumen
+  ].filter(Boolean);
+  return parts.join(' | ').substring(0, 80) || '';
+}
+
+function renderHistory(modo) {
+  const key      = modo === 'simple' ? HIST_KEY_SIMPLE : HIST_KEY_SELECTIVA;
+  const containerId = `history-${modo}`;
+  const items    = histLoad(key);
+  const container = document.getElementById(containerId);
+  if (!items.length) { container.innerHTML = ''; return; }
+
+  let html = '<span class="history-label">Recientes:</span>';
+  items.forEach((item, idx) => {
+    const txt = modo === 'simple' ? item.texto : item.label;
+    const safe = txt.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    html += `<span class="history-chip" onclick="histApply('${modo}',${idx})" title="${safe}">`
+          + safe.substring(0, 35) + (safe.length > 35 ? '...' : '')
+          + `<span class="history-chip-del" onclick="event.stopPropagation();histRemove('${modo}',${idx})">&#x2715;</span>`
+          + '</span>';
+  });
+  container.innerHTML = html;
+}
+
+function histApply(modo, idx) {
+  const key   = modo === 'simple' ? HIST_KEY_SIMPLE : HIST_KEY_SELECTIVA;
+  const items = histLoad(key);
+  const item  = items[idx];
+  if (!item) return;
+
+  if (modo === 'simple') {
+    document.getElementById('s-texto').value   = item.texto || '';
+    document.getElementById('s-tipo').value    = item.tipo  || 'TODAS_LAS_PALABRAS';
+    document.getElementById('s-ordenar').value = item.ordenar || 'RELEVANCIA';
+  } else {
+    const p = item.payload || {};
+    document.getElementById('sel-texto').value         = p.texto || '';
+    document.getElementById('sel-fecha-desde').value   = p.fechaDesde || '';
+    document.getElementById('sel-fecha-hasta').value   = p.fechaHasta || '';
+    document.getElementById('sel-numero').value        = p.numeroSentencia || '';
+    document.getElementById('sel-procedimiento').value = p.procedimiento || '';
+    document.getElementById('sel-sede').value          = p.sede || '';
+    document.getElementById('sel-resumen').value       = p.resumen || '';
+  }
+  buscar();
+}
+
+function histRemove(modo, idx) {
+  const key   = modo === 'simple' ? HIST_KEY_SIMPLE : HIST_KEY_SELECTIVA;
+  const items = histLoad(key);
+  items.splice(idx, 1);
+  histSave(key, items);
+  renderHistory(modo);
+}
+
+// Inicializar historial al cargar
+renderHistory('simple');
+renderHistory('selectiva');
+
+// ─── Payload ───────────────────────────────────────────────────────────────
+
+function buildPayload() {
+  if (modoActual === 'simple') {
+    return {
+      modo:         'simple',
+      texto:        document.getElementById('s-texto').value.trim(),
+      tipoBusqueda: document.getElementById('s-tipo').value,
+      ordenar:      document.getElementById('s-ordenar').value,
+    };
+  }
+  return {
+    modo:            'selectiva',
+    texto:           document.getElementById('sel-texto').value.trim(),
+    fechaDesde:      document.getElementById('sel-fecha-desde').value.trim(),
+    fechaHasta:      document.getElementById('sel-fecha-hasta').value.trim(),
+    numeroSentencia: document.getElementById('sel-numero').value.trim(),
+    procedimiento:   document.getElementById('sel-procedimiento').value.trim(),
+    sede:            document.getElementById('sel-sede').value.trim(),
+    resumen:         document.getElementById('sel-resumen').value.trim(),
+  };
+}
+
+// ─── Busqueda ──────────────────────────────────────────────────────────────
+
+async function buscar() {
+  const payload = buildPayload();
+  ultimaBusqueda = payload;
+
+  setStatus('Consultando el BJN...', 'loading');
+  document.getElementById('results-area').style.display = 'none';
+  cerrarDetalle();
+
+  try {
+    const r    = await fetch('/api/buscar', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.error || 'Error desconocido');
+
+    sessionId = data.sid || null;
+    histAdd(payload);
+    setStatus('', '');
+    renderResults(data);
+  } catch (e) {
+    setStatus('Error: ' + e.message, 'error');
+  }
+}
+
+// ─── Paginacion ────────────────────────────────────────────────────────────
+
+async function cambiarPagina(direction) {
+  if (!sessionId) return;
+
+  setStatus('Cargando pagina...', 'loading');
+  document.getElementById('result-list').innerHTML = '';
+
+  try {
+    const r    = await fetch('/api/pagina', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sid: sessionId, direction }),
+    });
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.error || 'Error');
+
+    setStatus('', '');
+    renderResults(data);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  } catch (e) {
+    setStatus('Error: ' + e.message, 'error');
+  }
+}
+
+function renderPagination(pagination) {
+  const bar      = document.getElementById('pagination');
+  const btnPrev  = document.getElementById('btn-prev');
+  const btnNext  = document.getElementById('btn-next');
+  const pageInfo = document.getElementById('page-info');
+
+  paginacionActual = pagination || { hasNext: false, hasPrev: false, pageText: '' };
+
+  if (!paginacionActual.hasNext && !paginacionActual.hasPrev) {
+    bar.style.display = 'none';
+    return;
+  }
+
+  bar.style.display = 'flex';
+  btnPrev.disabled = !paginacionActual.hasPrev;
+  btnNext.disabled = !paginacionActual.hasNext;
+  pageInfo.textContent = paginacionActual.pageText || '';
+}
+
+// ─── Render resultados ─────────────────────────────────────────────────────
+
+function renderResults(data) {
+  const area  = document.getElementById('results-area');
+  const list  = document.getElementById('result-list');
+  const count = document.getElementById('results-count');
+
+  count.innerHTML = `<strong>${data.results.length}</strong> resultado${data.results.length !== 1 ? 's' : ''} encontrado${data.results.length !== 1 ? 's' : ''}`;
+  list.innerHTML = '';
+
+  if (data.results.length === 0) {
+    list.innerHTML = '<div style="padding:20px; color:#666; text-align:center;">Sin resultados para los criterios ingresados.</div>';
+  } else {
+    data.results.forEach((r, i) => {
+      const card = document.createElement('div');
+      card.className = 'result-card';
+      card.onclick = () => cargarDetalle(i, card);
+      card.innerHTML = `
+        <div class="result-meta">
+          ${r.numero ? `<span class="badge badge-numero">${r.numero}</span>` : ''}
+          ${r.tipo ? `<span class="badge badge-tipo">${r.tipo}</span>` : ''}
+          ${r.tribunal ? `<span class="badge badge-tribunal">${r.tribunal}</span>` : ''}
+        </div>
+        ${r.proceso ? `<div class="result-proceso">${r.proceso}</div>` : ''}
+        <div class="result-extracto">${highlight(r.extracto, ultimaBusqueda?.texto)}</div>
+      `;
+      list.appendChild(card);
+    });
+  }
+
+  area.style.display = 'block';
+  renderPagination(data.pagination);
+}
+
+function highlight(text, query) {
+  if (!query || !text) return text || '';
+  const words = query.trim().split(/\s+/).filter(w => w.length > 2);
+  let result = text;
+  words.forEach(w => {
+    const re = new RegExp(`(${w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
+    result = result.replace(re, '<mark style="background:#fef9c3; padding:0 1px;">$1</mark>');
+  });
+  return result;
+}
+
+// ─── Detalle ───────────────────────────────────────────────────────────────
+
+async function cargarDetalle(index, cardEl) {
+  document.querySelectorAll('.result-card').forEach(c => c.classList.remove('selected'));
+  if (cardEl) cardEl.classList.add('selected');
+
+  const payload = { ...ultimaBusqueda, index, sid: sessionId };
+
+  setStatus('Cargando texto de la sentencia...', 'loading');
+  cerrarDetalle();
+
+  try {
+    const r    = await fetch('/api/detalle', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.error || 'Error');
+
+    setStatus('', '');
+
+    document.getElementById('detail-title').textContent = data.titulo;
+
+    const body = document.getElementById('detail-body');
+    body.textContent = data.detalle || '(Sin texto disponible)';
+
+    if (ultimaBusqueda?.texto) {
+      body.innerHTML = highlight(body.innerHTML, ultimaBusqueda.texto);
+    }
+
+    const palabras = data.detalle ? data.detalle.trim().split(/\s+/).length : 0;
+    document.getElementById('detail-chars').textContent =
+      `Texto completo: ~${palabras.toLocaleString()} palabras`;
+
+    const panel = document.getElementById('detail-panel');
+    panel.classList.add('active');
+    panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+  } catch (e) {
+    setStatus('Error al cargar detalle: ' + e.message, 'error');
+  }
+}
+
+// ─── Copiar / Exportar ─────────────────────────────────────────────────────
+
+function copiarTexto() {
+  const titulo = document.getElementById('detail-title').textContent;
+  const cuerpo = document.getElementById('detail-body').innerText;
+  navigator.clipboard.writeText(`${titulo}\n\n${cuerpo}`)
+    .then(() => {
+      const btn  = document.querySelector('.btn-icon[onclick="copiarTexto()"]');
+      const orig = btn.innerHTML;
+      btn.innerHTML = '&#10003; Copiado';
+      setTimeout(() => btn.innerHTML = orig, 2000);
+    })
+    .catch(() => alert('No se pudo copiar. Seleccione el texto manualmente.'));
+}
+
+function exportarTxt() {
+  const titulo = document.getElementById('detail-title').textContent.trim();
+  const cuerpo = document.getElementById('detail-body').innerText.trim();
+  if (!titulo && !cuerpo) return;
+
+  const contenido = `${titulo}\n${'='.repeat(titulo.length)}\n\n${cuerpo}`;
+  const blob      = new Blob([contenido], { type: 'text/plain;charset=utf-8' });
+  const url       = URL.createObjectURL(blob);
+  const a         = document.createElement('a');
+  // Nombre de archivo a partir del numero de sentencia si esta disponible
+  const match     = titulo.match(/\d+\/\d+/);
+  const nombre    = match ? `sentencia_${match[0].replace('/', '-')}.txt` : 'sentencia.txt';
+  a.href          = url;
+  a.download      = nombre;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function cerrarDetalle() {
+  document.getElementById('detail-panel').classList.remove('active');
+  document.getElementById('detail-body').textContent = '';
+  document.getElementById('detail-title').textContent = '';
+  document.getElementById('detail-chars').textContent = '';
+}
+</script>
+
+</body>
+</html>
