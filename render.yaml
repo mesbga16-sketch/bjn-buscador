@@ -3,7 +3,7 @@ services:
     name: bjn-buscador
     runtime: python
     pythonVersion: "3.11.0"
-    buildCommand: pip install -r requirements.txt && playwright install chromium
+    buildCommand: pip install -r requirements.txt && playwright install --with-deps chromium
     startCommand: python server.py
     envVars:
       - key: PORT
