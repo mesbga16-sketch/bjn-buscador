@@ -243,10 +243,10 @@ def _playwright_worker():
             wait_results(page)
             raw        = page.evaluate(EXTRACT_JS)
             pagination = page.evaluate(PAGINATION_JS)
-            sid        = _save_session(page)
-            # Preparar nueva pagina selectiva en background (via tarea en la cola)
-            sel_page = None
-            _task_queue.put({'type': 'warmup', 'result': None})
+            # La pagina selectiva se mantiene activa (sel_page sigue siendo page)
+            # para que la proxima busqueda use Limpiar en lugar de recargar.
+            # Solo se recarga si la pagina muere (get_sel_page lo detecta).
+            sid = _save_session(page)
             return raw, sid, pagination
         else:
             page = new_ctx_page()
@@ -283,6 +283,9 @@ def _playwright_worker():
             s    = _get_session(sid)
             page = s['page']
 
+        # En busqueda selectiva los resultados son celdas con onclick A4J.AJAX
+        # que en el oncomplete llaman a window.open('/BJNPUBLICA/hojaInsumo2.seam?cid=...')
+        # Interceptamos window.open para capturar la URL sin abrir un popup real.
         links  = page.query_selector_all('a[onclick*="lnkTituloSentencia"]')
         celdas = page.query_selector_all('td[id*="dataTable:"][id*=":colFec"]')
 
@@ -295,16 +298,40 @@ def _playwright_worker():
         else:
             raise ValueError('Resultado no encontrado.')
 
-        with page.context.expect_page(timeout=12000) as popup_info:
-            elemento.click()
-        popup = popup_info.value
-        popup.wait_for_load_state('domcontentloaded', timeout=20000)
-        detalle_text = popup.evaluate(
+        # Inyectar interceptor de window.open
+        page.evaluate("""
+            () => {
+                window._capturedPopupUrl = null;
+                window.open = function(url, name, features) {
+                    window._capturedPopupUrl = url;
+                    return { focus: () => {}, closed: false };
+                };
+            }
+        """)
+
+        # Hacer clic y esperar que el AJAX termine
+        elemento.click()
+        page.wait_for_timeout(3000)
+        popup_url = page.evaluate('() => window._capturedPopupUrl')
+
+        if not popup_url:
+            # Fallback: intentar capturar popup real
+            raise ValueError('No se pudo obtener la URL de la sentencia. Intente nuevamente.')
+
+        # Construir URL completa si es relativa
+        if popup_url.startswith('/'):
+            popup_url = f'https://bjn.poderjudicial.gub.uy{popup_url}'
+
+        # Navegar a la URL del popup con las cookies de la sesion actual
+        popup_page = new_ctx_page()
+        cookies = page.context.cookies()
+        popup_page.context.add_cookies(cookies)
+        popup_page.goto(popup_url, wait_until='domcontentloaded', timeout=20000)
+        detalle_text = popup_page.evaluate(
             "() => { const box = document.getElementById('textoSentenciaBox');"
             "  if (box) return box.innerText.trim(); return document.body.innerText.trim(); }"
         )
-        popup_url = popup.url
-        popup.close()
+        popup_page.context.close()
         return {'titulo': titulo, 'detalle': detalle_text, 'popup_url': popup_url, 'sid': sid}
 
     # Precalentar al arrancar
@@ -320,9 +347,7 @@ def _playwright_worker():
         result_holder = task.get('result')  # threading.Event + dict compartido
         try:
             t = task['type']
-            if t == 'warmup':
-                load_selectiva()
-            elif t == 'status':
+            if t == 'status':
                 result_holder['value'] = {'selectiva_ready': sel_page is not None}
                 result_holder['event'].set()
             elif t == 'search':
