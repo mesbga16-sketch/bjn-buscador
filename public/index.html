@@ -86,6 +86,86 @@
   }
   textarea { resize: vertical; min-height: 60px; }
 
+  /* Ayuda selectiva */
+  .ayuda-panel {
+    background: #f0f5ff;
+    border: 1px solid #c3d4f0;
+    border-radius: 6px;
+    padding: 14px 16px;
+    margin-bottom: 16px;
+    font-size: 13px;
+    color: var(--texto);
+  }
+  .ayuda-panel summary {
+    cursor: pointer;
+    font-weight: 600;
+    color: var(--azul-claro);
+    font-size: 13px;
+    user-select: none;
+    list-style: none;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .ayuda-panel summary::-webkit-details-marker { display: none; }
+  .ayuda-panel summary::before {
+    content: '▶';
+    font-size: 10px;
+    transition: transform 0.2s;
+    display: inline-block;
+  }
+  .ayuda-panel[open] summary::before { transform: rotate(90deg); }
+  .ayuda-body { margin-top: 12px; display: flex; flex-direction: column; gap: 10px; }
+  .ayuda-campo {
+    display: grid;
+    grid-template-columns: 160px 1fr;
+    gap: 6px 12px;
+    align-items: start;
+    padding: 8px 10px;
+    background: white;
+    border-radius: 4px;
+    border: 1px solid var(--borde);
+  }
+  .ayuda-campo-nombre {
+    font-weight: 600;
+    font-size: 12px;
+    color: var(--azul);
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    padding-top: 1px;
+  }
+  .ayuda-campo-desc { font-size: 12.5px; color: var(--extracto); line-height: 1.5; }
+  .ayuda-campo-ej {
+    grid-column: 2;
+    font-size: 11.5px;
+    color: #555;
+    background: #f4f5f7;
+    border-radius: 3px;
+    padding: 3px 7px;
+    font-family: monospace;
+    margin-top: 2px;
+    display: inline-block;
+  }
+  .ayuda-alerta {
+    background: #fff8e1;
+    border: 1px solid #ffe082;
+    border-radius: 4px;
+    padding: 8px 12px;
+    font-size: 12.5px;
+    color: #7a5c00;
+    line-height: 1.5;
+  }
+  .field-hint {
+    font-size: 11px;
+    color: #6b7280;
+    margin-top: 2px;
+    line-height: 1.4;
+  }
+  @media (max-width: 600px) {
+    .ayuda-campo { grid-template-columns: 1fr; }
+    .ayuda-campo-ej { grid-column: 1; }
+  }
+
   .form-row { display: flex; gap: 12px; align-items: flex-end; margin-top: 14px; }
   .form-row .field { flex: 1; }
 
@@ -348,14 +428,65 @@
 
   <!-- Busqueda Selectiva -->
   <div id="panel-selectiva" class="form-panel">
+
+    <!-- Panel de ayuda colapsable -->
+    <details class="ayuda-panel">
+      <summary>&#9432; Cómo usar la búsqueda selectiva</summary>
+      <div class="ayuda-body">
+
+        <div class="ayuda-campo">
+          <span class="ayuda-campo-nombre">Texto libre</span>
+          <span class="ayuda-campo-desc">Busca en el cuerpo completo de la sentencia. Es el campo más potente. Acepta frases y palabras sueltas.</span>
+          <span class="ayuda-campo-ej">ej: &ldquo;accidente de trabajo&rdquo; &nbsp;|&nbsp; &ldquo;responsabilidad estatal&rdquo;</span>
+        </div>
+
+        <div class="ayuda-campo">
+          <span class="ayuda-campo-nombre">Resumen / Descriptor</span>
+          <span class="ayuda-campo-desc">Busca en el campo resumen de la sentencia. Usa <strong>una sola palabra</strong> o un descriptor jurídico estandarizado. No acepta frases de dos palabras.</span>
+          <span class="ayuda-campo-ej">ej: &ldquo;despido&rdquo; &nbsp;|&nbsp; &ldquo;rapiña&rdquo; &nbsp;|&nbsp; &ldquo;homicidio&rdquo;</span>
+        </div>
+
+        <div class="ayuda-campo">
+          <span class="ayuda-campo-nombre">Procedimiento</span>
+          <span class="ayuda-campo-desc">Filtra por tipo de proceso. Escribi una palabra del nombre del procedimiento.</span>
+          <span class="ayuda-campo-ej">ej: &ldquo;laboral&rdquo; &nbsp;|&nbsp; &ldquo;penal&rdquo; &nbsp;|&nbsp; &ldquo;civil&rdquo; &nbsp;|&nbsp; &ldquo;familia&rdquo;</span>
+        </div>
+
+        <div class="ayuda-campo">
+          <span class="ayuda-campo-nombre">Tribunal / Sede</span>
+          <span class="ayuda-campo-desc">Filtra por órgano jurisdiccional. Pods usar el nombre completo o una parte.</span>
+          <span class="ayuda-campo-ej">ej: &ldquo;TAT 1&rdquo; &nbsp;|&nbsp; &ldquo;Juzgado Trabajo 1&rdquo; &nbsp;|&nbsp; &ldquo;Suprema Corte&rdquo;</span>
+        </div>
+
+        <div class="ayuda-campo">
+          <span class="ayuda-campo-nombre">Fecha desde / hasta</span>
+          <span class="ayuda-campo-desc">Filtra por rango de fechas. <strong>Deben completarse ambas</strong> para que el filtro funcione.</span>
+          <span class="ayuda-campo-ej">ej: desde 01/01/2020 hasta 31/12/2023</span>
+        </div>
+
+        <div class="ayuda-campo">
+          <span class="ayuda-campo-nombre">Número de sentencia</span>
+          <span class="ayuda-campo-desc">Busca una sentencia específica por su número y año.</span>
+          <span class="ayuda-campo-ej">ej: 96/2021 &nbsp;|&nbsp; 189/2009</span>
+        </div>
+
+        <div class="ayuda-alerta">
+          <strong>Importante:</strong> todos los campos se combinan con AND. Si llenás Texto libre y Resumen con el mismo valor, el BJN busca sentencias que cumplan ambas condiciones a la vez, lo que reduce los resultados. Recomendamos usar <em>un solo campo por búsqueda</em> o combinar campos distintos (ej: Texto libre + Tribunal).
+        </div>
+
+      </div>
+    </details>
+
     <div class="form-grid">
       <div class="field wide">
         <label>Texto libre</label>
         <textarea id="sel-texto" rows="2" placeholder="Palabras a buscar en el texto de la sentencia..."></textarea>
+        <span class="field-hint">Busca en el cuerpo completo de la sentencia. Acepta frases.</span>
       </div>
       <div class="field">
         <label>Fecha desde <span style="color:#888;font-size:0.85em;font-weight:400">(requiere ambas)</span></label>
         <input type="text" id="sel-fecha-desde" placeholder="dd/mm/aaaa">
+        <span class="field-hint">Completar ambas fechas para activar el filtro.</span>
       </div>
       <div class="field">
         <label>Fecha hasta <span style="color:#888;font-size:0.85em;font-weight:400">(requiere ambas)</span></label>
@@ -368,14 +499,17 @@
       <div class="field">
         <label>Procedimiento</label>
         <input type="text" id="sel-procedimiento" placeholder="ej: laboral, civil...">
+        <span class="field-hint">Una palabra del tipo de proceso: laboral, penal, civil, familia.</span>
       </div>
       <div class="field">
         <label>Tribunal / Sede</label>
         <input type="text" id="sel-sede" placeholder="ej: TAT 1, Juzgado Trabajo 1...">
+        <span class="field-hint">Nombre completo o parcial del órgano jurisdiccional.</span>
       </div>
       <div class="field wide">
         <label>Resumen / Descriptor</label>
-        <input type="text" id="sel-resumen" placeholder="palabras del resumen...">
+        <input type="text" id="sel-resumen" placeholder="ej: despido, rapiña, homicidio...">
+        <span class="field-hint">Usa <strong>una sola palabra</strong>. Busca en el campo resumen de la sentencia (no en el texto completo). Los descriptores son términos jurídicos estandarizados.</span>
       </div>
     </div>
     <div class="form-row" style="justify-content:flex-end; margin-top:14px;">
