@@ -92,8 +92,23 @@ def activate_simple(page):
 
 def activate_selectiva(page):
     page.goto(BJN_SIMPLE, wait_until='domcontentloaded', timeout=20000)
+    # Esperar que el link Selectiva esté disponible
+    page.wait_for_selector('a:has-text("Selectiva")', timeout=10000)
+    # El clic dispara A4J.AJAX.Submit que redirige a busquedaSelectiva.seam?cid=XXXX
     page.locator('a:has-text("Selectiva")').click()
-    page.wait_for_selector('textarea[name*="cajaQuery"]', timeout=12000)
+    # Polling: esperar hasta que la URL cambie (la redirección puede tardar 2-5 segundos)
+    deadline = time.time() + 15
+    while time.time() < deadline:
+        if 'busquedaSelectiva' in page.url:
+            break
+        page.wait_for_timeout(300)
+    # Esperar que el formulario selectivo esté completamente renderizado.
+    # RichFaces hace polling AJAX constante, por lo que networkidle nunca se alcanza.
+    # Usamos wait_for_selector con timeout generoso como señal de que el DOM está listo.
+    page.wait_for_selector(
+        'input[name*="fechaDesdeCalInputDate"], input[name*="ayudanteNumero"]',
+        timeout=30000
+    )
 
 def fill_simple(page, texto, tipo_busqueda, ordenar):
     activate_simple(page)
@@ -109,22 +124,44 @@ def fill_simple(page, texto, tipo_busqueda, ordenar):
 
 def fill_selectiva(page, texto, fecha_desde, fecha_hasta, numero, procedimiento, resumen, sede=''):
     activate_selectiva(page)
+    # Texto libre (textarea)
     if texto:
-        page.fill('textarea[name*="cajaQuery"]', texto)
+        ta = page.locator('textarea[name*="cajaQuery"]')
+        if ta.count() > 0:
+            ta.first.fill(texto)
+        else:
+            # Fallback: primer textarea visible
+            page.locator('textarea').first.fill(texto)
+    # Fecha desde: el campo de fecha usa un widget JSF que requiere Tab + espera AJAX
     if fecha_desde:
         el = page.locator('input[name*="fechaDesdeCalInputDate"]')
-        el.fill(fecha_desde)
-        el.press('Tab')
+        if el.count() > 0:
+            el.fill(fecha_desde)
+            el.press('Tab')
+            page.wait_for_timeout(1500)  # Esperar validación AJAX del calendario
+    # Fecha hasta
     if fecha_hasta:
         el = page.locator('input[name*="fechaHastaCalInputDate"]')
-        el.fill(fecha_hasta)
-        el.press('Tab')
+        if el.count() > 0:
+            el.fill(fecha_hasta)
+            el.press('Tab')
+            page.wait_for_timeout(1500)  # Esperar validación AJAX del calendario
+    # Número de sentencia
     if numero:
-        page.fill('input[name*="ayudanteNumero"]', numero)
+        el = page.locator('input[name*="ayudanteNumero"]')
+        if el.count() > 0:
+            el.fill(numero)
+    # Procedimiento
     if procedimiento:
-        page.fill('input[name*="ayudanteProc"]', procedimiento)
+        el = page.locator('input[name*="ayudanteProc"]')
+        if el.count() > 0:
+            el.fill(procedimiento)
+    # Resumen / descriptor
     if resumen:
-        page.fill('input[name*="ayudanteResumen"]', resumen)
+        el = page.locator('input[name*="ayudanteResumen"]')
+        if el.count() > 0:
+            el.fill(resumen)
+    # Sede / tribunal (campo con modal de selección)
     if sede:
         for sel in ['input[name*="ayudanteSede"]', 'input[name*="Sede"]',
                     'input[name*="sede"]', 'input[name*="tribunal"]']:
@@ -135,7 +172,8 @@ def fill_selectiva(page, texto, fecha_desde, fecha_hasta, numero, procedimiento,
                     break
             except Exception:
                 pass
-    page.click('input[type="button"][name$=":Search"]')
+    # Botón Buscar del formulario selectivo
+    page.locator('input[name="formBusqueda:j_id20:Search"]').click()
 
 def wait_results(page):
     try:
