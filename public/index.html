@@ -156,7 +156,8 @@
     cursor: pointer;
     transition: border-color 0.15s, box-shadow 0.15s;
   }
-  .result-card:hover { border-color: var(--azul-claro); box-shadow: 0 2px 6px rgba(0,0,0,0.07); }
+  .result-card:hover { border-color: var(--azul-claro); box-shadow: 0 2px 8px rgba(37,99,168,0.13); background: #f8faff; }
+  .result-card:hover::after { content: 'Ver sentencia →'; float: right; font-size: 11px; color: var(--azul-claro); font-weight: 600; margin-top: -2px; }
   .result-card.selected { border-color: var(--azul-claro); background: #f0f5ff; }
 
   .result-meta {
@@ -847,7 +848,7 @@ function renderResults(data) {
       hint.id = 'hint-clic';
       hint.style.cssText = 'font-size:12px; color:#6b7280; padding:6px 2px 2px; margin-bottom:4px;';
       hint.textContent = '&#128071; Hacé clic en un resultado para ver el texto completo de la sentencia.';
-      hint.innerHTML = '&#128071; Hacé clic en un resultado para ver el texto completo de la sentencia.';
+      hint.innerHTML = '&#128071; Hacé clic en cualquier parte de una tarjeta para ver el texto completo de esa sentencia.';
       list.before(hint);
     }
     resultados.forEach((r, i) => {
