@@ -595,6 +595,25 @@ function buildPayload() {
 
 // ─── Busqueda ──────────────────────────────────────────────────────────────
 
+async function esperarServidorListo(maxEspera = 90000) {
+  // Espera hasta que el servidor tenga la pagina selectiva precalentada.
+  // Muestra progreso al usuario. Devuelve true si esta listo, false si timeout.
+  const inicio = Date.now();
+  let intento = 0;
+  while (Date.now() - inicio < maxEspera) {
+    try {
+      const r = await fetch('/api/status');
+      const d = await r.json();
+      if (d.selectiva_ready) return true;
+    } catch (e) { /* servidor aun arrancando */ }
+    intento++;
+    const seg = Math.round((Date.now() - inicio) / 1000);
+    setStatus(`Iniciando el servidor (${seg}s)... El primer uso tarda hasta 90 segundos.`, 'loading');
+    await new Promise(res => setTimeout(res, 5000));
+  }
+  return false;
+}
+
 async function buscar() {
   const payload = buildPayload();
   ultimaBusqueda = payload;
@@ -611,6 +630,22 @@ async function buscar() {
   setStatus('Consultando el BJN...', 'loading');
   document.getElementById('results-area').style.display = 'none';
   cerrarDetalle();
+
+  // Si es busqueda selectiva, verificar que el servidor este listo antes de buscar
+  if (payload.modo === 'selectiva') {
+    try {
+      const r = await fetch('/api/status');
+      const d = await r.json();
+      if (!d.selectiva_ready) {
+        const listo = await esperarServidorListo(90000);
+        if (!listo) {
+          setStatus('El servidor tardó demasiado en iniciar. Intentá de nuevo en unos segundos.', 'error');
+          return;
+        }
+        setStatus('Consultando el BJN...', 'loading');
+      }
+    } catch (e) { /* continuar igual */ }
+  }
 
   // Reintentar hasta 2 veces si el servidor devuelve respuesta vacía (timeout de Render)
   for (let intento = 1; intento <= 2; intento++) {
