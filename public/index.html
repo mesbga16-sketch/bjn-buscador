@@ -354,11 +354,11 @@
         <textarea id="sel-texto" rows="2" placeholder="Palabras a buscar en el texto de la sentencia..."></textarea>
       </div>
       <div class="field">
-        <label>Fecha desde</label>
+        <label>Fecha desde <span style="color:#888;font-size:0.85em;font-weight:400">(requiere ambas)</span></label>
         <input type="text" id="sel-fecha-desde" placeholder="dd/mm/aaaa">
       </div>
       <div class="field">
-        <label>Fecha hasta</label>
+        <label>Fecha hasta <span style="color:#888;font-size:0.85em;font-weight:400">(requiere ambas)</span></label>
         <input type="text" id="sel-fecha-hasta" placeholder="dd/mm/aaaa">
       </div>
       <div class="field">
@@ -598,6 +598,15 @@ function buildPayload() {
 async function buscar() {
   const payload = buildPayload();
   ultimaBusqueda = payload;
+
+  // Validar que fecha desde y fecha hasta se ingresen juntas (regla del BJN)
+  if (payload.modo === 'selectiva') {
+    const fd = payload.fechaDesde, fh = payload.fechaHasta;
+    if ((fd && !fh) || (!fd && fh)) {
+      setStatus('El BJN requiere ingresar <strong>ambas fechas</strong> (desde y hasta) para filtrar por fecha.', 'error');
+      return;
+    }
+  }
 
   setStatus('Consultando el BJN...', 'loading');
   document.getElementById('results-area').style.display = 'none';
