@@ -1,7 +1,7 @@
 """
 BJN Buscador - Servidor Flask + Playwright
 Busqueda de sentencias en la Base de Jurisprudencia Nacional (Uruguay)
-v2: paginacion, campo sede/tribunal, exportar
+v3: lock de busqueda, verificacion de campos, retry automatico
 """
 
 from flask import Flask, request, jsonify, send_from_directory, Response
@@ -18,6 +18,10 @@ BJN_SIMPLE = 'https://bjn.poderjudicial.gub.uy/BJNPUBLICA/busquedaSimple.seam'
 _pw           = None
 _browser      = None
 _browser_lock = threading.Lock()
+
+# Lock global de busqueda: serializa todas las requests para evitar
+# que dos busquedas simultaneas se pisen en el mismo browser.
+_search_lock  = threading.Lock()
 
 def get_browser():
     global _pw, _browser
@@ -92,23 +96,40 @@ def activate_simple(page):
 
 def activate_selectiva(page):
     page.goto(BJN_SIMPLE, wait_until='domcontentloaded', timeout=20000)
-    # Esperar que el link Selectiva esté disponible
     page.wait_for_selector('a:has-text("Selectiva")', timeout=10000)
-    # El clic dispara A4J.AJAX.Submit que redirige a busquedaSelectiva.seam?cid=XXXX
     page.locator('a:has-text("Selectiva")').click()
-    # Polling: esperar hasta que la URL cambie (la redirección puede tardar 2-5 segundos)
+    # Polling: esperar hasta que la URL cambie
     deadline = time.time() + 15
     while time.time() < deadline:
         if 'busquedaSelectiva' in page.url:
             break
         page.wait_for_timeout(300)
-    # Esperar que el formulario selectivo esté completamente renderizado.
-    # RichFaces hace polling AJAX constante, por lo que networkidle nunca se alcanza.
-    # Usamos wait_for_selector con timeout generoso como señal de que el DOM está listo.
+    # Esperar que el formulario este renderizado
     page.wait_for_selector(
         'input[name*="fechaDesdeCalInputDate"], input[name*="ayudanteNumero"]',
         timeout=30000
     )
+    # Pausa adicional para que RichFaces termine de inicializar los widgets
+    page.wait_for_timeout(1000)
+
+def _fill_verified(page, selector: str, value: str, max_attempts: int = 3) -> bool:
+    """
+    Llena un campo y verifica que el valor quedó escrito.
+    Reintenta hasta max_attempts veces si el campo queda vacío.
+    Devuelve True si el valor quedó correctamente escrito.
+    """
+    for attempt in range(max_attempts):
+        el = page.locator(selector)
+        if el.count() == 0:
+            return False
+        el.first.fill(value)
+        page.wait_for_timeout(300)
+        actual = el.first.input_value()
+        if actual == value:
+            return True
+        # El valor no quedó: esperar un poco más y reintentar
+        page.wait_for_timeout(500 * (attempt + 1))
+    return False
 
 def fill_simple(page, texto, tipo_busqueda, ordenar):
     activate_simple(page)
@@ -124,62 +145,76 @@ def fill_simple(page, texto, tipo_busqueda, ordenar):
 
 def fill_selectiva(page, texto, fecha_desde, fecha_hasta, numero, procedimiento, resumen, sede=''):
     activate_selectiva(page)
-    # Texto libre (textarea)
+
+    # Texto libre (textarea). El selector real en busquedaSelectiva.seam
+    # no tiene name="cajaQuery"; es el primer textarea visible del formulario.
     if texto:
-        ta = page.locator('textarea[name*="cajaQuery"]')
-        if ta.count() > 0:
-            ta.first.fill(texto)
-        else:
+        # Intentar primero con el selector especifico, luego con fallback
+        filled = False
+        for sel in ['textarea[name*="cajaQuery"]', 'textarea[name*="query"]',
+                    'textarea[name*="Query"]']:
+            el = page.locator(sel)
+            if el.count() > 0:
+                el.first.fill(texto)
+                page.wait_for_timeout(300)
+                if el.first.input_value() == texto:
+                    filled = True
+                    break
+        if not filled:
             # Fallback: primer textarea visible
-            page.locator('textarea').first.fill(texto)
-    # Fecha desde: el campo de fecha usa un widget JSF que requiere Tab + espera AJAX
+            textareas = page.locator('textarea')
+            for i in range(textareas.count()):
+                t = textareas.nth(i)
+                if t.is_visible():
+                    t.fill(texto)
+                    page.wait_for_timeout(300)
+                    if t.input_value() == texto:
+                        break
+
+    # Fecha desde
     if fecha_desde:
-        el = page.locator('input[name*="fechaDesdeCalInputDate"]')
-        if el.count() > 0:
-            el.fill(fecha_desde)
-            el.press('Tab')
-            page.wait_for_timeout(1500)  # Esperar validación AJAX del calendario
+        _fill_verified(page, 'input[name*="fechaDesdeCalInputDate"]', fecha_desde)
+        page.locator('input[name*="fechaDesdeCalInputDate"]').first.press('Tab')
+        page.wait_for_timeout(1500)
+
     # Fecha hasta
     if fecha_hasta:
-        el = page.locator('input[name*="fechaHastaCalInputDate"]')
-        if el.count() > 0:
-            el.fill(fecha_hasta)
-            el.press('Tab')
-            page.wait_for_timeout(1500)  # Esperar validación AJAX del calendario
+        _fill_verified(page, 'input[name*="fechaHastaCalInputDate"]', fecha_hasta)
+        page.locator('input[name*="fechaHastaCalInputDate"]').first.press('Tab')
+        page.wait_for_timeout(1500)
+
     # Número de sentencia
     if numero:
-        el = page.locator('input[name*="ayudanteNumero"]')
-        if el.count() > 0:
-            el.fill(numero)
+        _fill_verified(page, 'input[name*="ayudanteNumero"]', numero)
+
     # Procedimiento
     if procedimiento:
-        el = page.locator('input[name*="ayudanteProc"]')
-        if el.count() > 0:
-            el.fill(procedimiento)
+        _fill_verified(page, 'input[name*="ayudanteProc"]', procedimiento)
+
     # Resumen / descriptor
     if resumen:
-        el = page.locator('input[name*="ayudanteResumen"]')
-        if el.count() > 0:
-            el.fill(resumen)
-    # Sede / tribunal (campo con modal de selección)
+        _fill_verified(page, 'input[name*="ayudanteResumen"]', resumen)
+
+    # Sede / tribunal
     if sede:
         for sel in ['input[name*="ayudanteSede"]', 'input[name*="Sede"]',
                     'input[name*="sede"]', 'input[name*="tribunal"]']:
             try:
                 el = page.locator(sel)
                 if el.count() > 0:
-                    el.first.fill(sede)
+                    _fill_verified(page, sel, sede)
                     break
             except Exception:
                 pass
-    # Botón Buscar del formulario selectivo
+
+    # Botón Buscar
     page.locator('input[name="formBusqueda:j_id20:Search"]').click()
 
 def wait_results(page):
     try:
         page.wait_for_selector(
             'a[onclick*="lnkTituloSentencia"], td[id*="dataTable:"][id*=":colFec"]',
-            timeout=15000
+            timeout=20000
         )
     except PwTimeout:
         pass
@@ -314,12 +349,13 @@ def buscar():
     campos = ['texto','fechaDesde','fechaHasta','numeroSentencia','procedimiento','resumen','sede']
     if not any(data.get(c, '').strip() for c in campos):
         return jsonify({'error': 'Ingrese al menos un criterio de busqueda.'}), 400
-    try:
-        results, sid, pagination = do_search(data)
-        return jsonify({'results': results, 'total': len(results),
-                        'query': data.get('texto', ''), 'sid': sid, 'pagination': pagination})
-    except Exception as e:
-        return jsonify({'error': f'Error al consultar el BJN: {str(e)}'}), 500
+    with _search_lock:
+        try:
+            results, sid, pagination = do_search(data)
+            return jsonify({'results': results, 'total': len(results),
+                            'query': data.get('texto', ''), 'sid': sid, 'pagination': pagination})
+        except Exception as e:
+            return jsonify({'error': f'Error al consultar el BJN: {str(e)}'}), 500
 
 @app.route('/api/pagina', methods=['POST'])
 def pagina():
@@ -330,17 +366,18 @@ def pagina():
     if not session:
         return jsonify({'error': 'Sesion expirada. Realice la busqueda nuevamente.'}), 400
     page = session['page']
-    try:
-        ok = go_page(page, direction)
-        if not ok:
-            return jsonify({'error': 'No hay mas paginas en esa direccion.'}), 400
-        raw        = extract_results(page)
-        results    = process_raw_results(raw)
-        pagination = check_pagination(page)
-        return jsonify({'results': results, 'total': len(results),
-                        'sid': sid, 'pagination': pagination})
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
+    with _search_lock:
+        try:
+            ok = go_page(page, direction)
+            if not ok:
+                return jsonify({'error': 'No hay mas paginas en esa direccion.'}), 400
+            raw        = extract_results(page)
+            results    = process_raw_results(raw)
+            pagination = check_pagination(page)
+            return jsonify({'results': results, 'total': len(results),
+                            'sid': sid, 'pagination': pagination})
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
 
 @app.route('/api/detalle', methods=['POST'])
 def detalle():
@@ -348,51 +385,52 @@ def detalle():
     index = int(data.get('index', 0))
     sid   = data.get('sid', '')
 
-    try:
-        session = _get_session(sid) if sid else None
-        if session:
-            page = session['page']
-        else:
-            _, sid, _ = do_search(data)
-            session   = _get_session(sid)
-            page      = session['page']
+    with _search_lock:
+        try:
+            session = _get_session(sid) if sid else None
+            if session:
+                page = session['page']
+            else:
+                _, sid, _ = do_search(data)
+                session   = _get_session(sid)
+                page      = session['page']
 
-        links  = page.query_selector_all('a[onclick*="lnkTituloSentencia"]')
-        celdas = page.query_selector_all('td[id*="dataTable:"][id*=":colFec"]')
+            links  = page.query_selector_all('a[onclick*="lnkTituloSentencia"]')
+            celdas = page.query_selector_all('td[id*="dataTable:"][id*=":colFec"]')
 
-        if links and index < len(links):
-            titulo   = links[index].inner_text().strip()
-            elemento = links[index]
-        elif celdas and index < len(celdas):
-            tr     = page.evaluate('el => el.closest("tr").innerText.trim().substring(0, 120)', celdas[index])
-            titulo = tr
-            elemento = celdas[index]
-        else:
-            return jsonify({'error': 'Resultado no encontrado.'}), 404
+            if links and index < len(links):
+                titulo   = links[index].inner_text().strip()
+                elemento = links[index]
+            elif celdas and index < len(celdas):
+                tr     = page.evaluate('el => el.closest("tr").innerText.trim().substring(0, 120)', celdas[index])
+                titulo = tr
+                elemento = celdas[index]
+            else:
+                return jsonify({'error': 'Resultado no encontrado.'}), 404
 
-        with page.context.expect_page(timeout=12000) as popup_info:
-            elemento.click()
+            with page.context.expect_page(timeout=12000) as popup_info:
+                elemento.click()
 
-        popup = popup_info.value
-        popup.wait_for_load_state('domcontentloaded', timeout=20000)
+            popup = popup_info.value
+            popup.wait_for_load_state('domcontentloaded', timeout=20000)
 
-        detalle_text = popup.evaluate(
-            "() => { const box = document.getElementById('textoSentenciaBox');"
-            "  if (box) return box.innerText.trim();"
-            "  return document.body.innerText.trim(); }"
-        )
+            detalle_text = popup.evaluate(
+                "() => { const box = document.getElementById('textoSentenciaBox');"
+                "  if (box) return box.innerText.trim();"
+                "  return document.body.innerText.trim(); }"
+            )
 
-        popup_url = popup.url
-        popup.close()
+            popup_url = popup.url
+            popup.close()
 
-        return jsonify({'titulo': titulo, 'detalle': detalle_text,
-                        'popup_url': popup_url, 'sid': sid})
+            return jsonify({'titulo': titulo, 'detalle': detalle_text,
+                            'popup_url': popup_url, 'sid': sid})
 
-    except PwTimeout:
-        return jsonify({'error': 'El BJN tardo demasiado en responder. Intente nuevamente.'}), 504
-    except Exception as e:
-        _close_session(sid)
-        return jsonify({'error': f'Error al cargar la sentencia: {str(e)}'}), 500
+        except PwTimeout:
+            return jsonify({'error': 'El BJN tardo demasiado en responder. Intente nuevamente.'}), 504
+        except Exception as e:
+            _close_session(sid)
+            return jsonify({'error': f'Error al cargar la sentencia: {str(e)}'}), 500
 
 @app.route('/api/ver-sentencia', methods=['POST'])
 def ver_sentencia():
@@ -429,4 +467,4 @@ def _shutdown():
 
 if __name__ == '__main__':
     print(f'\nBJN Buscador en http://localhost:{PORT}\n')
-    app.run(host='0.0.0.0', port=PORT, debug=False, threaded=False)
+    app.run(host='0.0.0.0', port=PORT, debug=False, threaded=True)
