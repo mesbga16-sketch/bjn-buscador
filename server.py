@@ -1,8 +1,7 @@
 """
 BJN Buscador - Servidor Flask + Playwright
 Busqueda de sentencias en la Base de Jurisprudencia Nacional (Uruguay)
-v7: worker thread dedicado para Playwright (resuelve el error "cannot switch to a different thread").
-    Todas las operaciones del browser se ejecutan en un unico thread.
+v8: solo busqueda simple. Se elimina la busqueda selectiva.
 """
 
 from flask import Flask, request, jsonify, send_from_directory, Response
@@ -222,50 +221,23 @@ def _playwright_worker():
             pass
 
     def do_search(data):
-        nonlocal sel_page
-        modo          = data.get('modo', 'simple')
         texto         = data.get('texto', '').strip()
         tipo_busqueda = data.get('tipoBusqueda', 'TODAS_LAS_PALABRAS')
         ordenar       = data.get('ordenar', 'RELEVANCIA')
-        fecha_desde   = data.get('fechaDesde', '').strip()
-        fecha_hasta   = data.get('fechaHasta', '').strip()
-        numero        = data.get('numeroSentencia', '').strip()
-        procedimiento = data.get('procedimiento', '').strip()
-        resumen       = data.get('resumen', '').strip()
-        sede          = data.get('sede', '').strip()
 
-        if modo == 'selectiva':
-            page = get_sel_page()
-            if page is None:
-                raise RuntimeError('No se pudo inicializar la pagina de busqueda selectiva.')
-            limpiar_formulario(page)
-            fill_selectiva(page, texto, fecha_desde, fecha_hasta, numero, procedimiento, resumen, sede)
-            wait_results(page)
-            raw        = page.evaluate(EXTRACT_JS)
-            pagination = page.evaluate(PAGINATION_JS)
-            # NO guardar sel_page en _sessions: si la sesion expira y se cierra el contexto,
-            # sel_page quedaria muerta. En cambio usamos un sid especial 'SEL_PAGE' que
-            # do_detalle y do_pagina resuelven directamente a sel_page.
-            return raw, 'SEL_PAGE', pagination
-        else:
-            page = new_ctx_page()
-            fill_simple(page, texto, tipo_busqueda, ordenar)
-            wait_results(page)
-            raw        = page.evaluate(EXTRACT_JS)
-            pagination = page.evaluate(PAGINATION_JS)
-            sid        = _save_session(page)
-            return raw, sid, pagination
+        page = new_ctx_page()
+        fill_simple(page, texto, tipo_busqueda, ordenar)
+        wait_results(page)
+        raw        = page.evaluate(EXTRACT_JS)
+        pagination = page.evaluate(PAGINATION_JS)
+        sid        = _save_session(page)
+        return raw, sid, pagination
 
     def do_pagina(sid, direction):
-        if sid == 'SEL_PAGE':
-            page = get_sel_page()
-            if page is None:
-                raise ValueError('La pagina selectiva no esta disponible.')
-        else:
-            s = _get_session(sid)
-            if not s:
-                raise ValueError('Sesion expirada.')
-            page = s['page']
+        s = _get_session(sid)
+        if not s:
+            raise ValueError('Sesion expirada.')
+        page = s['page']
         text_pats = ['siguiente', '>>', '>'] if direction == 'next' else ['anterior', '<<', '<']
         clicked   = page.evaluate(GO_PAGE_JS, [text_pats])
         if not clicked:
@@ -279,25 +251,16 @@ def _playwright_worker():
     def do_detalle(data):
         index = int(data.get('index', 0))
         sid   = data.get('sid', '')
-        if sid == 'SEL_PAGE':
-            page = get_sel_page()
-            if page is None:
-                raise ValueError('La pagina selectiva no esta disponible. Busca de nuevo.')
+        s     = _get_session(sid) if sid else None
+        if s:
+            page = s['page']
         else:
-            s = _get_session(sid) if sid else None
-            if s:
-                page = s['page']
-            else:
-                raw, sid, _ = do_search(data)
-                if sid == 'SEL_PAGE':
-                    page = get_sel_page()
-                else:
-                    s    = _get_session(sid)
-                    page = s['page']
+            raw, sid, _ = do_search(data)
+            s    = _get_session(sid)
+            page = s['page']
 
-        # En busqueda selectiva los resultados son celdas con onclick A4J.AJAX
-        # que en el oncomplete llaman a window.open('/BJNPUBLICA/hojaInsumo2.seam?cid=...')
-        # Interceptamos window.open para capturar la URL sin abrir un popup real.
+        # El clic en un resultado ejecuta A4J.AJAX que en el oncomplete llama a window.open.
+        # Interceptamos window.open para capturar la URL de la sentencia sin abrir popup real.
         links  = page.query_selector_all('a[onclick*="lnkTituloSentencia"]')
         celdas = page.query_selector_all('td[id*="dataTable:"][id*=":colFec"]')
 
@@ -346,11 +309,6 @@ def _playwright_worker():
         popup_page.context.close()
         return {'titulo': titulo, 'detalle': detalle_text, 'popup_url': popup_url, 'sid': sid}
 
-    # Precalentar al arrancar
-    print('[worker] Precalentando pagina selectiva...')
-    load_selectiva()
-    print('[worker] Pagina selectiva lista.')
-
     # Loop principal del worker
     while True:
         task = _task_queue.get()
@@ -360,7 +318,7 @@ def _playwright_worker():
         try:
             t = task['type']
             if t == 'status':
-                result_holder['value'] = {'selectiva_ready': sel_page is not None}
+                result_holder['value'] = {'ok': True}
                 result_holder['event'].set()
             elif t == 'search':
                 raw, sid, pagination = do_search(task['data'])
@@ -434,18 +392,7 @@ def parse_title(titulo: str) -> dict:
     return {'numero': '', 'tipo': '', 'tribunal': '', 'proceso': titulo}
 
 def process_raw_results(raw: list) -> list:
-    results = []
-    for r in raw:
-        if r.get('modo') == 'selectiva':
-            parts = r['titulo'].split(' - ', 2)
-            results.append({**r,
-                'numero':   parts[0] if len(parts) > 0 else '',
-                'tipo':     parts[1] if len(parts) > 1 else '',
-                'tribunal': parts[2] if len(parts) > 2 else '',
-                'proceso':  r['extracto'].split(' | ')[1] if ' | ' in r['extracto'] else ''})
-        else:
-            results.append({**r, **parse_title(r['titulo'])})
-    return results
+    return [{**r, **parse_title(r['titulo'])} for r in raw]
 
 # ─── Rutas ────────────────────────────────────────────────────────────────────
 
@@ -455,10 +402,9 @@ def index():
 
 @app.route('/api/buscar', methods=['POST'])
 def buscar():
-    data   = request.get_json() or {}
-    campos = ['texto','fechaDesde','fechaHasta','numeroSentencia','procedimiento','resumen','sede']
-    if not any(data.get(c, '').strip() for c in campos):
-        return jsonify({'error': 'Ingrese al menos un criterio de busqueda.'}), 400
+    data = request.get_json() or {}
+    if not data.get('texto', '').strip():
+        return jsonify({'error': 'Ingrese un texto para buscar.'}), 400
     try:
         res    = _call_worker({'type': 'search', 'data': data})
         results = process_raw_results(res['raw'])

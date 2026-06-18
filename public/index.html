@@ -13,6 +13,7 @@
     --texto: #1c2733;
     --extracto: #4a5568;
     --rojo: #c0392b;
+    --verde: #166534;
   }
 
   * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -33,45 +34,47 @@
     align-items: center;
     gap: 14px;
   }
-
   header h1 { font-size: 18px; font-weight: 600; letter-spacing: 0.3px; }
   header span { font-size: 12px; opacity: 0.7; }
 
   .container { max-width: 1100px; margin: 0 auto; padding: 20px 16px; }
 
-  /* Tabs */
-  .tabs { display: flex; gap: 0; border-bottom: 2px solid var(--azul-claro); margin-bottom: 16px; }
-  .tab {
-    padding: 8px 20px;
-    cursor: pointer;
-    border: 1px solid transparent;
-    border-bottom: none;
-    border-radius: 4px 4px 0 0;
+  /* Formulario de búsqueda */
+  .search-panel {
     background: white;
-    color: var(--extracto);
-    font-size: 13px;
-    font-weight: 500;
-    transition: background 0.15s;
+    border: 1px solid var(--borde);
+    border-radius: 6px;
+    padding: 18px 20px;
   }
-  .tab.active { background: var(--azul-claro); color: white; border-color: var(--azul-claro); }
-  .tab:not(.active):hover { background: #e8f0fb; }
 
-  /* Forms */
-  .form-panel { background: white; border: 1px solid var(--borde); border-radius: 6px; padding: 18px 20px; display: none; }
-  .form-panel.active { display: block; }
+  .search-main {
+    display: flex;
+    gap: 10px;
+    align-items: flex-end;
+  }
+  .search-main .field { flex: 1; }
 
-  .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 20px; }
-  .form-grid.single { grid-template-columns: 1fr; }
+  .filters-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 10px 16px;
+    margin-top: 12px;
+  }
 
   .field { display: flex; flex-direction: column; gap: 4px; }
-  .field.wide { grid-column: 1 / -1; }
 
-  label { font-size: 12px; font-weight: 600; color: var(--azul); text-transform: uppercase; letter-spacing: 0.4px; }
+  label {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--azul);
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+  }
 
-  input[type="text"], input[type="date"], select, textarea {
+  input[type="text"], select {
     border: 1px solid var(--borde);
     border-radius: 4px;
-    padding: 7px 10px;
+    padding: 8px 10px;
     font-size: 14px;
     font-family: inherit;
     color: var(--texto);
@@ -79,95 +82,11 @@
     width: 100%;
     transition: border-color 0.15s;
   }
-  input:focus, select:focus, textarea:focus {
+  input:focus, select:focus {
     outline: none;
     border-color: var(--azul-claro);
     box-shadow: 0 0 0 2px rgba(37,99,168,0.12);
   }
-  textarea { resize: vertical; min-height: 60px; }
-
-  /* Ayuda selectiva */
-  .ayuda-panel {
-    background: #f0f5ff;
-    border: 1px solid #c3d4f0;
-    border-radius: 6px;
-    padding: 14px 16px;
-    margin-bottom: 16px;
-    font-size: 13px;
-    color: var(--texto);
-  }
-  .ayuda-panel summary {
-    cursor: pointer;
-    font-weight: 600;
-    color: var(--azul-claro);
-    font-size: 13px;
-    user-select: none;
-    list-style: none;
-    display: flex;
-    align-items: center;
-    gap: 6px;
-  }
-  .ayuda-panel summary::-webkit-details-marker { display: none; }
-  .ayuda-panel summary::before {
-    content: '▶';
-    font-size: 10px;
-    transition: transform 0.2s;
-    display: inline-block;
-  }
-  .ayuda-panel[open] summary::before { transform: rotate(90deg); }
-  .ayuda-body { margin-top: 12px; display: flex; flex-direction: column; gap: 10px; }
-  .ayuda-campo {
-    display: grid;
-    grid-template-columns: 160px 1fr;
-    gap: 6px 12px;
-    align-items: start;
-    padding: 8px 10px;
-    background: white;
-    border-radius: 4px;
-    border: 1px solid var(--borde);
-  }
-  .ayuda-campo-nombre {
-    font-weight: 600;
-    font-size: 12px;
-    color: var(--azul);
-    text-transform: uppercase;
-    letter-spacing: 0.3px;
-    padding-top: 1px;
-  }
-  .ayuda-campo-desc { font-size: 12.5px; color: var(--extracto); line-height: 1.5; }
-  .ayuda-campo-ej {
-    grid-column: 2;
-    font-size: 11.5px;
-    color: #555;
-    background: #f4f5f7;
-    border-radius: 3px;
-    padding: 3px 7px;
-    font-family: monospace;
-    margin-top: 2px;
-    display: inline-block;
-  }
-  .ayuda-alerta {
-    background: #fff8e1;
-    border: 1px solid #ffe082;
-    border-radius: 4px;
-    padding: 8px 12px;
-    font-size: 12.5px;
-    color: #7a5c00;
-    line-height: 1.5;
-  }
-  .field-hint {
-    font-size: 11px;
-    color: #6b7280;
-    margin-top: 2px;
-    line-height: 1.4;
-  }
-  @media (max-width: 600px) {
-    .ayuda-campo { grid-template-columns: 1fr; }
-    .ayuda-campo-ej { grid-column: 1; }
-  }
-
-  .form-row { display: flex; gap: 12px; align-items: flex-end; margin-top: 14px; }
-  .form-row .field { flex: 1; }
 
   .btn {
     padding: 8px 22px;
@@ -177,6 +96,7 @@
     font-size: 14px;
     font-weight: 600;
     transition: opacity 0.15s;
+    white-space: nowrap;
   }
   .btn:hover { opacity: 0.87; }
   .btn-primary { background: var(--azul-claro); color: white; }
@@ -205,17 +125,13 @@
     cursor: pointer;
     color: var(--azul);
     white-space: nowrap;
-    max-width: 200px;
+    max-width: 220px;
     overflow: hidden;
     text-overflow: ellipsis;
     transition: background 0.12s;
   }
   .history-chip:hover { background: #dde8f8; }
-  .history-chip-del {
-    margin-left: 4px;
-    opacity: 0.5;
-    font-size: 10px;
-  }
+  .history-chip-del { margin-left: 4px; opacity: 0.5; font-size: 10px; }
 
   /* Results */
   .results-header {
@@ -225,8 +141,11 @@
     margin: 18px 0 10px;
     font-size: 13px;
     color: var(--extracto);
+    gap: 10px;
+    flex-wrap: wrap;
   }
   .results-count strong { color: var(--texto); }
+  .results-actions { display: flex; gap: 8px; align-items: center; }
 
   .result-list { display: flex; flex-direction: column; gap: 8px; }
 
@@ -258,10 +177,13 @@
   }
   .badge-numero { background: var(--azul); color: white; }
   .badge-tipo { background: #e8f0fb; color: var(--azul); }
-  .badge-tribunal { background: #f0fdf4; color: #166534; border: 1px solid #bbf7d0; }
+  .badge-tribunal { background: #f0fdf4; color: var(--verde); border: 1px solid #bbf7d0; }
+  .badge-definitiva { background: #1a3a5c; color: white; }
+  .badge-interlocutoria { background: #7c3aed; color: white; }
 
   .result-proceso { font-size: 12px; color: var(--extracto); margin-bottom: 5px; }
-  .result-extracto { font-size: 13px; color: var(--extracto); line-height: 1.5; }
+  .result-extracto { font-size: 13px; color: var(--extracto); line-height: 1.55; }
+  .result-extracto mark { background: #fef9c3; padding: 0 1px; border-radius: 2px; }
 
   /* Paginacion */
   .pagination {
@@ -305,7 +227,7 @@
     margin-bottom: 14px;
     gap: 12px;
   }
-  .detail-title { font-size: 15px; font-weight: 700; color: var(--azul); }
+  .detail-title { font-size: 15px; font-weight: 700; color: var(--azul); line-height: 1.4; }
 
   .detail-body {
     white-space: pre-wrap;
@@ -318,12 +240,14 @@
     overflow-y: auto;
     font-family: 'Georgia', serif;
   }
+  .detail-body mark { background: #fef9c3; padding: 0 2px; border-radius: 2px; }
 
   .detail-actions {
     display: flex;
     gap: 8px;
     align-items: center;
     flex-wrap: wrap;
+    flex-shrink: 0;
   }
   .btn-icon {
     padding: 5px 12px;
@@ -338,9 +262,10 @@
     align-items: center;
     gap: 5px;
     transition: background 0.15s;
+    white-space: nowrap;
   }
   .btn-icon:hover { background: #f0f5ff; border-color: var(--azul-claro); }
-  .detail-expand { font-size: 11px; color: var(--extracto); margin-top: 6px; }
+  .detail-meta { font-size: 11px; color: var(--extracto); margin-top: 4px; }
 
   /* Status */
   .status {
@@ -351,7 +276,7 @@
     display: none;
   }
   .status.loading { background: #eff6ff; color: var(--azul); border: 1px solid #bfdbfe; display: block; }
-  .status.error { background: #fef2f2; color: var(--rojo); border: 1px solid #fca5a5; display: block; }
+  .status.error   { background: #fef2f2; color: var(--rojo); border: 1px solid #fca5a5; display: block; }
 
   .spinner {
     display: inline-block;
@@ -364,16 +289,44 @@
     vertical-align: middle;
   }
   @keyframes spin { to { transform: rotate(360deg); } }
-
   .timer { font-size: 11px; opacity: 0.7; margin-left: 8px; }
+
+  /* Compartir toast */
+  .toast {
+    position: fixed;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%) translateY(20px);
+    background: #1a3a5c;
+    color: white;
+    padding: 10px 20px;
+    border-radius: 6px;
+    font-size: 13px;
+    opacity: 0;
+    transition: opacity 0.3s, transform 0.3s;
+    pointer-events: none;
+    z-index: 999;
+  }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 
   .bjn-link {
     font-size: 12px;
-    color: var(--azul-claro);
+    color: rgba(255,255,255,0.75);
     text-decoration: none;
-    border-bottom: 1px dotted var(--azul-claro);
+    border-bottom: 1px dotted rgba(255,255,255,0.4);
+    margin-left: auto;
   }
-  .bjn-link:hover { color: var(--azul); }
+  .bjn-link:hover { color: white; }
+
+  @media (max-width: 640px) {
+    .filters-row { grid-template-columns: 1fr 1fr; }
+    .search-main { flex-wrap: wrap; }
+    .search-main .btn { width: 100%; }
+    .detail-actions { flex-direction: column; align-items: flex-start; }
+  }
+  @media (max-width: 400px) {
+    .filters-row { grid-template-columns: 1fr; }
+  }
 </style>
 </head>
 <body>
@@ -383,28 +336,29 @@
     <h1>BJN - Base de Jurisprudencia Nacional</h1>
     <span>Poder Judicial de la Rep. Oriental del Uruguay</span>
   </div>
-  <a class="bjn-link" href="https://bjn.poderjudicial.gub.uy/" target="_blank" style="color:rgba(255,255,255,0.75); margin-left:auto; font-size:12px; text-decoration:none; border-bottom:1px dotted rgba(255,255,255,0.4);">Abrir BJN original</a>
+  <a class="bjn-link" href="https://bjn.poderjudicial.gub.uy/" target="_blank">Abrir BJN original</a>
 </header>
 
 <div class="container">
 
-  <!-- Tabs -->
-  <div class="tabs">
-    <button class="tab active" onclick="switchTab('simple')">Busqueda Simple</button>
-    <button class="tab" onclick="switchTab('selectiva')">Busqueda Selectiva</button>
-  </div>
+  <!-- Formulario de búsqueda -->
+  <div class="search-panel">
 
-  <!-- Busqueda Simple -->
-  <div id="panel-simple" class="form-panel active">
-    <div class="form-grid single">
+    <!-- Fila principal: texto + botón -->
+    <div class="search-main">
       <div class="field">
         <label>Texto a buscar</label>
-        <input type="text" id="s-texto" placeholder="ej: despido abusivo, accidente laboral..." onkeydown="if(event.key==='Enter') buscar()">
+        <input type="text" id="s-texto"
+               placeholder="ej: despido abusivo, accidente laboral, responsabilidad estatal..."
+               onkeydown="if(event.key==='Enter') buscar()">
       </div>
+      <button class="btn btn-primary" onclick="buscar()" style="padding:8px 28px; align-self:flex-end;">Buscar</button>
     </div>
-    <div class="form-row">
+
+    <!-- Fila de filtros -->
+    <div class="filters-row">
       <div class="field">
-        <label>Tipo de busqueda</label>
+        <label>Tipo de búsqueda</label>
         <select id="s-tipo">
           <option value="TODAS_LAS_PALABRAS">Todas las palabras</option>
           <option value="FRASE_EXACTA">Frase exacta</option>
@@ -413,120 +367,37 @@
         </select>
       </div>
       <div class="field">
+        <label>Tipo de sentencia</label>
+        <select id="s-tipo-sentencia">
+          <option value="">Todas</option>
+          <option value="definitiva">Definitiva</option>
+          <option value="interlocutoria">Interlocutoria</option>
+        </select>
+      </div>
+      <div class="field">
         <label>Ordenar por</label>
         <select id="s-ordenar">
           <option value="RELEVANCIA">Relevancia</option>
-          <option value="FECHA_DESCENDENTE">Fecha (mas reciente)</option>
-          <option value="FECHA_ASCENDENTE">Fecha (mas antigua)</option>
+          <option value="FECHA_DESCENDENTE">Fecha (más reciente)</option>
+          <option value="FECHA_ASCENDENTE">Fecha (más antigua)</option>
         </select>
       </div>
-      <button class="btn btn-primary" onclick="buscar()" style="white-space:nowrap; padding:8px 28px;">Buscar</button>
     </div>
-    <!-- Historial simple -->
+
+    <!-- Historial -->
     <div id="history-simple" class="history-bar"></div>
-  </div>
-
-  <!-- Busqueda Selectiva -->
-  <div id="panel-selectiva" class="form-panel">
-
-    <!-- Panel de ayuda colapsable -->
-    <details class="ayuda-panel">
-      <summary>&#9432; Cómo usar la búsqueda selectiva</summary>
-      <div class="ayuda-body">
-
-        <div class="ayuda-campo">
-          <span class="ayuda-campo-nombre">Texto libre</span>
-          <span class="ayuda-campo-desc">Busca en el cuerpo completo de la sentencia. Es el campo más potente. Acepta frases y palabras sueltas.</span>
-          <span class="ayuda-campo-ej">ej: &ldquo;accidente de trabajo&rdquo; &nbsp;|&nbsp; &ldquo;responsabilidad estatal&rdquo;</span>
-        </div>
-
-        <div class="ayuda-campo">
-          <span class="ayuda-campo-nombre">Resumen / Descriptor</span>
-          <span class="ayuda-campo-desc">Busca en el campo resumen de la sentencia. Usa <strong>una sola palabra</strong> o un descriptor jurídico estandarizado. No acepta frases de dos palabras.</span>
-          <span class="ayuda-campo-ej">ej: &ldquo;despido&rdquo; &nbsp;|&nbsp; &ldquo;rapiña&rdquo; &nbsp;|&nbsp; &ldquo;homicidio&rdquo;</span>
-        </div>
-
-        <div class="ayuda-campo">
-          <span class="ayuda-campo-nombre">Procedimiento</span>
-          <span class="ayuda-campo-desc">Filtra por tipo de proceso. Escribi una palabra del nombre del procedimiento.</span>
-          <span class="ayuda-campo-ej">ej: &ldquo;laboral&rdquo; &nbsp;|&nbsp; &ldquo;penal&rdquo; &nbsp;|&nbsp; &ldquo;civil&rdquo; &nbsp;|&nbsp; &ldquo;familia&rdquo;</span>
-        </div>
-
-        <div class="ayuda-campo">
-          <span class="ayuda-campo-nombre">Tribunal / Sede</span>
-          <span class="ayuda-campo-desc">Filtra por órgano jurisdiccional. Pods usar el nombre completo o una parte.</span>
-          <span class="ayuda-campo-ej">ej: &ldquo;TAT 1&rdquo; &nbsp;|&nbsp; &ldquo;Juzgado Trabajo 1&rdquo; &nbsp;|&nbsp; &ldquo;Suprema Corte&rdquo;</span>
-        </div>
-
-        <div class="ayuda-campo">
-          <span class="ayuda-campo-nombre">Fecha desde / hasta</span>
-          <span class="ayuda-campo-desc">Filtra por rango de fechas. <strong>Deben completarse ambas</strong> para que el filtro funcione.</span>
-          <span class="ayuda-campo-ej">ej: desde 01/01/2020 hasta 31/12/2023</span>
-        </div>
-
-        <div class="ayuda-campo">
-          <span class="ayuda-campo-nombre">Número de sentencia</span>
-          <span class="ayuda-campo-desc">Busca una sentencia específica por su número y año.</span>
-          <span class="ayuda-campo-ej">ej: 96/2021 &nbsp;|&nbsp; 189/2009</span>
-        </div>
-
-        <div class="ayuda-alerta">
-          <strong>Importante:</strong> todos los campos se combinan con AND. Si llenás Texto libre y Resumen con el mismo valor, el BJN busca sentencias que cumplan ambas condiciones a la vez, lo que reduce los resultados. Recomendamos usar <em>un solo campo por búsqueda</em> o combinar campos distintos (ej: Texto libre + Tribunal).
-        </div>
-
-      </div>
-    </details>
-
-    <div class="form-grid">
-      <div class="field wide">
-        <label>Texto libre</label>
-        <textarea id="sel-texto" rows="2" placeholder="Palabras a buscar en el texto de la sentencia..."></textarea>
-        <span class="field-hint">Busca en el cuerpo completo de la sentencia. Acepta frases.</span>
-      </div>
-      <div class="field">
-        <label>Fecha desde <span style="color:#888;font-size:0.85em;font-weight:400">(requiere ambas)</span></label>
-        <input type="text" id="sel-fecha-desde" placeholder="dd/mm/aaaa">
-        <span class="field-hint">Completar ambas fechas para activar el filtro.</span>
-      </div>
-      <div class="field">
-        <label>Fecha hasta <span style="color:#888;font-size:0.85em;font-weight:400">(requiere ambas)</span></label>
-        <input type="text" id="sel-fecha-hasta" placeholder="dd/mm/aaaa">
-      </div>
-      <div class="field">
-        <label>Numero de sentencia</label>
-        <input type="text" id="sel-numero" placeholder="ej: 96/2021">
-      </div>
-      <div class="field">
-        <label>Procedimiento</label>
-        <input type="text" id="sel-procedimiento" placeholder="ej: laboral, civil...">
-        <span class="field-hint">Una palabra del tipo de proceso: laboral, penal, civil, familia.</span>
-      </div>
-      <div class="field">
-        <label>Tribunal / Sede</label>
-        <input type="text" id="sel-sede" placeholder="ej: TAT 1, Juzgado Trabajo 1...">
-        <span class="field-hint">Nombre completo o parcial del órgano jurisdiccional.</span>
-      </div>
-      <div class="field wide">
-        <label>Resumen / Descriptor</label>
-        <input type="text" id="sel-resumen" placeholder="ej: despido, rapiña, homicidio...">
-        <span class="field-hint">Usa <strong>una sola palabra</strong>. Busca en el campo resumen de la sentencia (no en el texto completo). Los descriptores son términos jurídicos estandarizados.</span>
-      </div>
-    </div>
-    <div class="form-row" style="justify-content:flex-end; margin-top:14px;">
-      <button class="btn btn-secondary" onclick="limpiarSelectiva()">Limpiar</button>
-      <button class="btn btn-primary" onclick="buscar()">Buscar</button>
-    </div>
-    <!-- Historial selectiva -->
-    <div id="history-selectiva" class="history-bar"></div>
   </div>
 
   <!-- Status con timer -->
   <div id="status" class="status"></div>
 
-  <!-- Results -->
+  <!-- Resultados -->
   <div id="results-area" style="display:none;">
     <div class="results-header">
       <div class="results-count" id="results-count"></div>
+      <div class="results-actions">
+        <button class="btn-icon" onclick="compartirBusqueda()" title="Copiar enlace a esta búsqueda">&#128279; Compartir</button>
+      </div>
     </div>
     <div class="result-list" id="result-list"></div>
 
@@ -538,45 +409,33 @@
     </div>
   </div>
 
-  <!-- Detail -->
+  <!-- Detalle de sentencia -->
   <div id="detail-panel" class="detail-panel">
     <div class="detail-header">
-      <div class="detail-title" id="detail-title"></div>
+      <div>
+        <div class="detail-title" id="detail-title"></div>
+        <div class="detail-meta" id="detail-meta"></div>
+      </div>
       <div class="detail-actions">
         <button class="btn-icon" onclick="copiarTexto()" title="Copiar texto completo">&#128203; Copiar</button>
         <button class="btn-icon" onclick="exportarTxt()" title="Descargar como archivo de texto">&#128190; Exportar .txt</button>
         <button class="btn-icon" onclick="cerrarDetalle()">&#x2715; Cerrar</button>
       </div>
     </div>
-    <div class="detail-expand" id="detail-chars"></div>
     <div class="detail-body" id="detail-body"></div>
   </div>
 
 </div>
 
+<!-- Toast de compartir -->
+<div class="toast" id="toast"></div>
+
 <script>
-let modoActual     = 'simple';
 let ultimaBusqueda = null;
 let sessionId      = null;
 let paginacionActual = { hasNext: false, hasPrev: false, pageText: '' };
 let timerInterval  = null;
 let timerStart     = 0;
-
-// ─── Tabs ──────────────────────────────────────────────────────────────────
-
-function switchTab(modo) {
-  modoActual = modo;
-  document.querySelectorAll('.tab').forEach((t, i) => {
-    t.classList.toggle('active', (i === 0 && modo === 'simple') || (i === 1 && modo === 'selectiva'));
-  });
-  document.getElementById('panel-simple').classList.toggle('active', modo === 'simple');
-  document.getElementById('panel-selectiva').classList.toggle('active', modo === 'selectiva');
-}
-
-function limpiarSelectiva() {
-  ['sel-texto','sel-fecha-desde','sel-fecha-hasta','sel-numero','sel-procedimiento','sel-resumen','sel-sede']
-    .forEach(id => document.getElementById(id).value = '');
-}
 
 // ─── Status con timer ──────────────────────────────────────────────────────
 
@@ -606,182 +465,139 @@ function setStatus(msg, tipo) {
   }
 }
 
+// ─── Toast ─────────────────────────────────────────────────────────────────
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2500);
+}
+
 // ─── Historial (localStorage) ──────────────────────────────────────────────
 
-const HIST_KEY_SIMPLE    = 'bjn_hist_simple';
-const HIST_KEY_SELECTIVA = 'bjn_hist_selectiva';
-const HIST_MAX           = 8;
+const HIST_KEY = 'bjn_hist_simple_v2';
+const HIST_MAX = 10;
 
-function histLoad(key) {
-  try { return JSON.parse(localStorage.getItem(key) || '[]'); }
+function histLoad() {
+  try { return JSON.parse(localStorage.getItem(HIST_KEY) || '[]'); }
   catch { return []; }
 }
 
-function histSave(key, items) {
-  localStorage.setItem(key, JSON.stringify(items));
+function histSave(items) {
+  localStorage.setItem(HIST_KEY, JSON.stringify(items));
 }
 
 function histAdd(payload) {
-  if (payload.modo === 'simple') {
-    const texto = (payload.texto || '').trim();
-    if (!texto) return;
-    const key   = HIST_KEY_SIMPLE;
-    const items = histLoad(key).filter(i => i.texto !== texto);
-    items.unshift({ texto, tipo: payload.tipoBusqueda, ordenar: payload.ordenar, ts: Date.now() });
-    histSave(key, items.slice(0, HIST_MAX));
-    renderHistory('simple');
-  } else {
-    const label = buildSelectivaLabel(payload);
-    if (!label) return;
-    const key   = HIST_KEY_SELECTIVA;
-    const items = histLoad(key).filter(i => i.label !== label);
-    items.unshift({ label, payload: JSON.parse(JSON.stringify(payload)), ts: Date.now() });
-    histSave(key, items.slice(0, HIST_MAX));
-    renderHistory('selectiva');
-  }
+  const texto = (payload.texto || '').trim();
+  if (!texto) return;
+  const items = histLoad().filter(i => i.texto !== texto);
+  items.unshift({
+    texto,
+    tipo:         payload.tipoBusqueda,
+    tipoSentencia: payload.tipoSentencia || '',
+    ordenar:      payload.ordenar,
+    ts:           Date.now()
+  });
+  histSave(items.slice(0, HIST_MAX));
+  renderHistory();
 }
 
-function buildSelectivaLabel(p) {
-  const parts = [
-    p.texto, p.fechaDesde && p.fechaHasta ? `${p.fechaDesde}-${p.fechaHasta}` :
-             (p.fechaDesde || p.fechaHasta || ''),
-    p.numeroSentencia, p.procedimiento, p.sede, p.resumen
-  ].filter(Boolean);
-  return parts.join(' | ').substring(0, 80) || '';
-}
-
-function renderHistory(modo) {
-  const key      = modo === 'simple' ? HIST_KEY_SIMPLE : HIST_KEY_SELECTIVA;
-  const containerId = `history-${modo}`;
-  const items    = histLoad(key);
-  const container = document.getElementById(containerId);
+function renderHistory() {
+  const items     = histLoad();
+  const container = document.getElementById('history-simple');
   if (!items.length) { container.innerHTML = ''; return; }
 
   let html = '<span class="history-label">Recientes:</span>';
   items.forEach((item, idx) => {
-    const txt = modo === 'simple' ? item.texto : item.label;
-    const safe = txt.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-    html += `<span class="history-chip" onclick="histApply('${modo}',${idx})" title="${safe}">`
+    const safe = item.texto.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    html += `<span class="history-chip" onclick="histApply(${idx})" title="${safe}">`
           + safe.substring(0, 35) + (safe.length > 35 ? '...' : '')
-          + `<span class="history-chip-del" onclick="event.stopPropagation();histRemove('${modo}',${idx})">&#x2715;</span>`
+          + `<span class="history-chip-del" onclick="event.stopPropagation();histRemove(${idx})">&#x2715;</span>`
           + '</span>';
   });
   container.innerHTML = html;
 }
 
-function histApply(modo, idx) {
-  const key   = modo === 'simple' ? HIST_KEY_SIMPLE : HIST_KEY_SELECTIVA;
-  const items = histLoad(key);
-  const item  = items[idx];
+function histApply(idx) {
+  const item = histLoad()[idx];
   if (!item) return;
-
-  if (modo === 'simple') {
-    document.getElementById('s-texto').value   = item.texto || '';
-    document.getElementById('s-tipo').value    = item.tipo  || 'TODAS_LAS_PALABRAS';
-    document.getElementById('s-ordenar').value = item.ordenar || 'RELEVANCIA';
-  } else {
-    const p = item.payload || {};
-    document.getElementById('sel-texto').value         = p.texto || '';
-    document.getElementById('sel-fecha-desde').value   = p.fechaDesde || '';
-    document.getElementById('sel-fecha-hasta').value   = p.fechaHasta || '';
-    document.getElementById('sel-numero').value        = p.numeroSentencia || '';
-    document.getElementById('sel-procedimiento').value = p.procedimiento || '';
-    document.getElementById('sel-sede').value          = p.sede || '';
-    document.getElementById('sel-resumen').value       = p.resumen || '';
-  }
+  document.getElementById('s-texto').value          = item.texto || '';
+  document.getElementById('s-tipo').value           = item.tipo  || 'TODAS_LAS_PALABRAS';
+  document.getElementById('s-tipo-sentencia').value = item.tipoSentencia || '';
+  document.getElementById('s-ordenar').value        = item.ordenar || 'RELEVANCIA';
   buscar();
 }
 
-function histRemove(modo, idx) {
-  const key   = modo === 'simple' ? HIST_KEY_SIMPLE : HIST_KEY_SELECTIVA;
-  const items = histLoad(key);
+function histRemove(idx) {
+  const items = histLoad();
   items.splice(idx, 1);
-  histSave(key, items);
-  renderHistory(modo);
+  histSave(items);
+  renderHistory();
 }
 
-// Inicializar historial al cargar
-renderHistory('simple');
-renderHistory('selectiva');
+renderHistory();
 
-// ─── Payload ───────────────────────────────────────────────────────────────
+// ─── URL params (compartir búsqueda) ──────────────────────────────────────
 
 function buildPayload() {
-  if (modoActual === 'simple') {
-    return {
-      modo:         'simple',
-      texto:        document.getElementById('s-texto').value.trim(),
-      tipoBusqueda: document.getElementById('s-tipo').value,
-      ordenar:      document.getElementById('s-ordenar').value,
-    };
-  }
   return {
-    modo:            'selectiva',
-    texto:           document.getElementById('sel-texto').value.trim(),
-    fechaDesde:      document.getElementById('sel-fecha-desde').value.trim(),
-    fechaHasta:      document.getElementById('sel-fecha-hasta').value.trim(),
-    numeroSentencia: document.getElementById('sel-numero').value.trim(),
-    procedimiento:   document.getElementById('sel-procedimiento').value.trim(),
-    sede:            document.getElementById('sel-sede').value.trim(),
-    resumen:         document.getElementById('sel-resumen').value.trim(),
+    modo:          'simple',
+    texto:         document.getElementById('s-texto').value.trim(),
+    tipoBusqueda:  document.getElementById('s-tipo').value,
+    tipoSentencia: document.getElementById('s-tipo-sentencia').value,
+    ordenar:       document.getElementById('s-ordenar').value,
   };
 }
 
-// ─── Busqueda ──────────────────────────────────────────────────────────────
-
-async function esperarServidorListo(maxEspera = 90000) {
-  // Espera hasta que el servidor tenga la pagina selectiva precalentada.
-  // Muestra progreso al usuario. Devuelve true si esta listo, false si timeout.
-  const inicio = Date.now();
-  let intento = 0;
-  while (Date.now() - inicio < maxEspera) {
-    try {
-      const r = await fetch('/api/status');
-      const d = await r.json();
-      if (d.selectiva_ready) return true;
-    } catch (e) { /* servidor aun arrancando */ }
-    intento++;
-    const seg = Math.round((Date.now() - inicio) / 1000);
-    setStatus(`Iniciando el servidor (${seg}s)... El primer uso tarda hasta 90 segundos.`, 'loading');
-    await new Promise(res => setTimeout(res, 5000));
-  }
-  return false;
+function payloadToParams(p) {
+  const params = new URLSearchParams();
+  if (p.texto)         params.set('q', p.texto);
+  if (p.tipoBusqueda && p.tipoBusqueda !== 'TODAS_LAS_PALABRAS') params.set('t', p.tipoBusqueda);
+  if (p.tipoSentencia) params.set('ts', p.tipoSentencia);
+  if (p.ordenar && p.ordenar !== 'RELEVANCIA') params.set('o', p.ordenar);
+  return params;
 }
+
+function loadFromParams() {
+  const params = new URLSearchParams(window.location.search);
+  if (!params.get('q')) return;
+  document.getElementById('s-texto').value          = params.get('q') || '';
+  document.getElementById('s-tipo').value           = params.get('t') || 'TODAS_LAS_PALABRAS';
+  document.getElementById('s-tipo-sentencia').value = params.get('ts') || '';
+  document.getElementById('s-ordenar').value        = params.get('o') || 'RELEVANCIA';
+  buscar();
+}
+
+function compartirBusqueda() {
+  if (!ultimaBusqueda) return;
+  const params = payloadToParams(ultimaBusqueda);
+  const url    = `${window.location.origin}${window.location.pathname}?${params.toString()}`;
+  navigator.clipboard.writeText(url)
+    .then(() => showToast('Enlace copiado al portapapeles'))
+    .catch(() => {
+      prompt('Copiá este enlace:', url);
+    });
+}
+
+// ─── Búsqueda ──────────────────────────────────────────────────────────────
 
 async function buscar() {
   const payload = buildPayload();
+  if (!payload.texto) {
+    setStatus('Ingresá un texto para buscar.', 'error');
+    return;
+  }
   ultimaBusqueda = payload;
 
-  // Validar que fecha desde y fecha hasta se ingresen juntas (regla del BJN)
-  if (payload.modo === 'selectiva') {
-    const fd = payload.fechaDesde, fh = payload.fechaHasta;
-    if ((fd && !fh) || (!fd && fh)) {
-      setStatus('El BJN requiere ingresar <strong>ambas fechas</strong> (desde y hasta) para filtrar por fecha.', 'error');
-      return;
-    }
-  }
+  // Actualizar URL sin recargar la página
+  const params = payloadToParams(payload);
+  history.replaceState(null, '', `?${params.toString()}`);
 
   setStatus('Consultando el BJN...', 'loading');
   document.getElementById('results-area').style.display = 'none';
   cerrarDetalle();
 
-  // Si es busqueda selectiva, verificar que el servidor este listo antes de buscar
-  if (payload.modo === 'selectiva') {
-    try {
-      const r = await fetch('/api/status');
-      const d = await r.json();
-      if (!d.selectiva_ready) {
-        const listo = await esperarServidorListo(90000);
-        if (!listo) {
-          setStatus('El servidor tardó demasiado en iniciar. Intentá de nuevo en unos segundos.', 'error');
-          return;
-        }
-        setStatus('Consultando el BJN...', 'loading');
-      }
-    } catch (e) { /* continuar igual */ }
-  }
-
-  // Reintentar hasta 2 veces si el servidor devuelve respuesta vacía (timeout de Render)
   for (let intento = 1; intento <= 2; intento++) {
     if (intento > 1) {
       setStatus('El servidor estaba ocupado. Reintentando...', 'loading');
@@ -789,9 +605,9 @@ async function buscar() {
     }
     try {
       const r    = await fetch('/api/buscar', {
-        method: 'POST',
+        method:  'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
+        body:    JSON.stringify(payload),
       });
       const text = await r.text();
       if (!text || !text.trim()) {
@@ -801,7 +617,7 @@ async function buscar() {
       }
       let data;
       try { data = JSON.parse(text); }
-      catch { 
+      catch {
         if (intento < 2) continue;
         setStatus('El servidor tardó demasiado. Intentá de nuevo en unos segundos.', 'error');
         return;
@@ -820,19 +636,18 @@ async function buscar() {
   }
 }
 
-// ─── Paginacion ────────────────────────────────────────────────────────────
+// ─── Paginación ────────────────────────────────────────────────────────────
 
 async function cambiarPagina(direction) {
   if (!sessionId) return;
-
-  setStatus('Cargando pagina...', 'loading');
+  setStatus('Cargando página...', 'loading');
   document.getElementById('result-list').innerHTML = '';
 
   try {
     const r    = await fetch('/api/pagina', {
-      method: 'POST',
+      method:  'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ sid: sessionId, direction }),
+      body:    JSON.stringify({ sid: sessionId, direction }),
     });
     const text = await r.text();
     if (!text || !text.trim()) {
@@ -841,7 +656,6 @@ async function cambiarPagina(direction) {
     }
     const data = JSON.parse(text);
     if (!r.ok) throw new Error(data.error || 'Error');
-
     setStatus('', '');
     renderResults(data);
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -864,9 +678,46 @@ function renderPagination(pagination) {
   }
 
   bar.style.display = 'flex';
-  btnPrev.disabled = !paginacionActual.hasPrev;
-  btnNext.disabled = !paginacionActual.hasNext;
+  btnPrev.disabled  = !paginacionActual.hasPrev;
+  btnNext.disabled  = !paginacionActual.hasNext;
   pageInfo.textContent = paginacionActual.pageText || '';
+}
+
+// ─── Resaltado de términos ─────────────────────────────────────────────────
+
+function highlight(text, query) {
+  if (!query || !text) return escapeHtml(text || '');
+  // Escapar HTML primero
+  let result = escapeHtml(text);
+  // Resaltar cada palabra de más de 2 caracteres
+  const words = query.trim().split(/\s+/).filter(w => w.length > 2);
+  words.forEach(w => {
+    const escaped = w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const re = new RegExp(`(${escaped})`, 'gi');
+    result = result.replace(re, '<mark>$1</mark>');
+  });
+  return result;
+}
+
+function escapeHtml(str) {
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+// ─── Filtro cliente por tipo de sentencia ─────────────────────────────────
+
+function matchTipoSentencia(r, filtro) {
+  if (!filtro) return true;
+  const tipo = (r.tipo || '').toLowerCase();
+  const num  = (r.numero || '').toLowerCase();
+  const proc = (r.proceso || '').toLowerCase();
+  const combined = tipo + ' ' + num + ' ' + proc;
+  if (filtro === 'definitiva')     return combined.includes('definitiv') || combined.includes('def.');
+  if (filtro === 'interlocutoria') return combined.includes('interlocut') || combined.includes('int.');
+  return true;
 }
 
 // ─── Render resultados ─────────────────────────────────────────────────────
@@ -876,24 +727,47 @@ function renderResults(data) {
   const list  = document.getElementById('result-list');
   const count = document.getElementById('results-count');
 
-  count.innerHTML = `<strong>${data.results.length}</strong> resultado${data.results.length !== 1 ? 's' : ''} encontrado${data.results.length !== 1 ? 's' : ''}`;
-  list.innerHTML = '';
+  const filtroTipo = ultimaBusqueda?.tipoSentencia || '';
+  const resultados = filtroTipo
+    ? data.results.filter(r => matchTipoSentencia(r, filtroTipo))
+    : data.results;
 
-  if (data.results.length === 0) {
+  const total = resultados.length;
+  const totalOriginal = data.results.length;
+
+  let countHtml = `<strong>${total}</strong> resultado${total !== 1 ? 's' : ''} encontrado${total !== 1 ? 's' : ''}`;
+  if (filtroTipo && totalOriginal !== total) {
+    countHtml += ` <span style="color:#6b7280; font-size:12px;">(${totalOriginal} sin filtro de tipo)</span>`;
+  }
+  count.innerHTML = countHtml;
+  list.innerHTML  = '';
+
+  if (total === 0) {
     list.innerHTML = '<div style="padding:20px; color:#666; text-align:center;">Sin resultados para los criterios ingresados.</div>';
   } else {
-    data.results.forEach((r, i) => {
+    resultados.forEach((r, i) => {
       const card = document.createElement('div');
       card.className = 'result-card';
-      card.onclick = () => cargarDetalle(i, card);
+      card.onclick   = () => cargarDetalle(data.results.indexOf(r), card);
+
+      // Badge de tipo de sentencia con color diferenciado
+      let tipoBadge = '';
+      if (r.tipo) {
+        const tipoLower = r.tipo.toLowerCase();
+        const cls = tipoLower.includes('definitiv') ? 'badge-definitiva'
+                  : tipoLower.includes('interlocut') ? 'badge-interlocutoria'
+                  : 'badge-tipo';
+        tipoBadge = `<span class="badge ${cls}">${escapeHtml(r.tipo)}</span>`;
+      }
+
       card.innerHTML = `
         <div class="result-meta">
-          ${r.numero ? `<span class="badge badge-numero">${r.numero}</span>` : ''}
-          ${r.tipo ? `<span class="badge badge-tipo">${r.tipo}</span>` : ''}
-          ${r.tribunal ? `<span class="badge badge-tribunal">${r.tribunal}</span>` : ''}
+          ${r.numero   ? `<span class="badge badge-numero">${escapeHtml(r.numero)}</span>` : ''}
+          ${tipoBadge}
+          ${r.tribunal ? `<span class="badge badge-tribunal">${escapeHtml(r.tribunal)}</span>` : ''}
         </div>
-        ${r.proceso ? `<div class="result-proceso">${r.proceso}</div>` : ''}
-        <div class="result-extracto">${highlight(r.extracto, ultimaBusqueda?.texto)}</div>
+        ${r.proceso ? `<div class="result-proceso">${escapeHtml(r.proceso)}</div>` : ''}
+        <div class="result-extracto">${highlight(r.extracto || '', ultimaBusqueda?.texto)}</div>
       `;
       list.appendChild(card);
     });
@@ -901,17 +775,6 @@ function renderResults(data) {
 
   area.style.display = 'block';
   renderPagination(data.pagination);
-}
-
-function highlight(text, query) {
-  if (!query || !text) return text || '';
-  const words = query.trim().split(/\s+/).filter(w => w.length > 2);
-  let result = text;
-  words.forEach(w => {
-    const re = new RegExp(`(${w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
-    result = result.replace(re, '<mark style="background:#fef9c3; padding:0 1px;">$1</mark>');
-  });
-  return result;
 }
 
 // ─── Detalle ───────────────────────────────────────────────────────────────
@@ -927,9 +790,9 @@ async function cargarDetalle(index, cardEl) {
 
   try {
     const r    = await fetch('/api/detalle', {
-      method: 'POST',
+      method:  'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
+      body:    JSON.stringify(payload),
     });
     const text = await r.text();
     if (!text || !text.trim()) throw new Error('El servidor tardó demasiado. Intentá de nuevo.');
@@ -938,18 +801,20 @@ async function cargarDetalle(index, cardEl) {
 
     setStatus('', '');
 
-    document.getElementById('detail-title').textContent = data.titulo;
+    document.getElementById('detail-title').textContent = data.titulo || '';
 
-    const body = document.getElementById('detail-body');
-    body.textContent = data.detalle || '(Sin texto disponible)';
-
-    if (ultimaBusqueda?.texto) {
-      body.innerHTML = highlight(body.innerHTML, ultimaBusqueda.texto);
-    }
-
+    // Palabras y metadata
     const palabras = data.detalle ? data.detalle.trim().split(/\s+/).length : 0;
-    document.getElementById('detail-chars').textContent =
-      `Texto completo: ~${palabras.toLocaleString()} palabras`;
+    document.getElementById('detail-meta').textContent =
+      `Texto completo · ~${palabras.toLocaleString()} palabras`;
+
+    // Cuerpo con resaltado de términos
+    const body = document.getElementById('detail-body');
+    if (ultimaBusqueda?.texto) {
+      body.innerHTML = highlight(data.detalle || '(Sin texto disponible)', ultimaBusqueda.texto);
+    } else {
+      body.textContent = data.detalle || '(Sin texto disponible)';
+    }
 
     const panel = document.getElementById('detail-panel');
     panel.classList.add('active');
@@ -972,7 +837,7 @@ function copiarTexto() {
       btn.innerHTML = '&#10003; Copiado';
       setTimeout(() => btn.innerHTML = orig, 2000);
     })
-    .catch(() => alert('No se pudo copiar. Seleccione el texto manualmente.'));
+    .catch(() => alert('No se pudo copiar. Seleccioná el texto manualmente.'));
 }
 
 function exportarTxt() {
@@ -984,7 +849,6 @@ function exportarTxt() {
   const blob      = new Blob([contenido], { type: 'text/plain;charset=utf-8' });
   const url       = URL.createObjectURL(blob);
   const a         = document.createElement('a');
-  // Nombre de archivo a partir del numero de sentencia si esta disponible
   const match     = titulo.match(/\d+\/\d+/);
   const nombre    = match ? `sentencia_${match[0].replace('/', '-')}.txt` : 'sentencia.txt';
   a.href          = url;
@@ -997,10 +861,15 @@ function exportarTxt() {
 
 function cerrarDetalle() {
   document.getElementById('detail-panel').classList.remove('active');
-  document.getElementById('detail-body').textContent = '';
+  document.getElementById('detail-body').innerHTML = '';
   document.getElementById('detail-title').textContent = '';
-  document.getElementById('detail-chars').textContent = '';
+  document.getElementById('detail-meta').textContent  = '';
 }
+
+// ─── Inicialización ────────────────────────────────────────────────────────
+
+// Cargar búsqueda desde URL si existe (enlace compartido)
+window.addEventListener('DOMContentLoaded', loadFromParams);
 </script>
 
 </body>
