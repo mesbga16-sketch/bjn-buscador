@@ -1,8 +1,8 @@
 """
 BJN Buscador - Servidor Flask + Playwright
 Busqueda de sentencias en la Base de Jurisprudencia Nacional (Uruguay)
-v5: arquitectura correcta - pagina precalentada para formulario,
-    sesion separada para resultados/paginacion/detalle.
+v6: pagina selectiva permanente con boton Limpiar entre busquedas (~7s/busqueda).
+    La carga inicial tarda ~60s (una vez al arrancar), luego cada busqueda es ~7s.
 """
 
 from flask import Flask, request, jsonify, send_from_directory, Response
@@ -48,12 +48,15 @@ def new_page():
             else:
                 raise
 
-# ─── Pagina selectiva precalentada ───────────────────────────────────────────
-# Mantiene una pagina con el formulario selectivo ya cargado.
-# Solo se usa para LLENAR el formulario y hacer clic en Buscar.
-# Los resultados se leen desde esta misma pagina, pero la sesion de
-# paginacion/detalle se guarda en una pagina SEPARADA para no bloquear
-# el formulario.
+# ─── Pagina selectiva permanente ─────────────────────────────────────────────
+# Mantiene una pagina con el formulario selectivo cargado de forma permanente.
+# Flujo por busqueda:
+#   1. Limpiar campos (boton Limpiar del BJN, ~5s)
+#   2. Llenar campos con los criterios de busqueda
+#   3. Clic en Buscar (~2s)
+#   4. Extraer resultados
+#   5. Guardar pagina en sesion para paginacion/detalle
+#   6. Cargar nueva pagina selectiva en background para la proxima busqueda
 
 _sel_page      = None
 _sel_page_lock = threading.Lock()
@@ -81,11 +84,7 @@ def _load_selectiva_page() -> bool:
         )
         page.wait_for_timeout(1000)
         with _sel_page_lock:
-            old = _sel_page
             _sel_page = page
-        if old is not None:
-            try: old.context.close()
-            except: pass
         return True
     except Exception as e:
         print(f'[WARN] Error cargando pagina selectiva: {e}')
@@ -101,8 +100,7 @@ def _warm_selectiva_bg():
 
 def _get_sel_page():
     """
-    Devuelve la pagina selectiva precalentada.
-    Si no esta lista o murio, carga una nueva (bloqueante).
+    Devuelve la pagina selectiva. Si no esta lista, la carga (bloqueante).
     """
     global _sel_page
     with _sel_page_lock:
@@ -110,9 +108,7 @@ def _get_sel_page():
     if page is not None:
         try:
             if 'busquedaSelectiva' in page.url:
-                el = page.locator('input[name*="ayudanteNumero"]')
-                if el.count() > 0:
-                    return page
+                return page
         except Exception:
             pass
     # No esta lista: cargar bloqueante
@@ -120,25 +116,27 @@ def _get_sel_page():
     with _sel_page_lock:
         return _sel_page
 
-def _reset_sel_page_fields(page):
-    """Limpia todos los campos del formulario sin recargar la pagina."""
+def _limpiar_formulario(page) -> bool:
+    """
+    Usa el boton Limpiar del BJN para resetear el formulario.
+    Devuelve True si tuvo exito.
+    """
     try:
-        for sel in [
-            'textarea', 'input[name*="fechaDesdeCalInputDate"]',
-            'input[name*="fechaHastaCalInputDate"]', 'input[name*="ayudanteNumero"]',
-            'input[name*="ayudanteProc"]', 'input[name*="ayudanteResumen"]',
-        ]:
-            try:
-                els = page.locator(sel)
-                for i in range(min(els.count(), 5)):
-                    if els.nth(i).is_visible():
-                        els.nth(i).fill('')
-            except Exception:
-                pass
+        limpiar_btn = page.locator(
+            'input[value*="impiar"], a:has-text("Limpiar"), '
+            'input[name*="Clear"], input[name*="clear"]'
+        )
+        if limpiar_btn.count() == 0:
+            return False
+        limpiar_btn.first.click()
+        page.wait_for_timeout(2000)
+        # Verificar que el formulario esta listo
+        page.wait_for_selector('input[name*="ayudanteResumen"]', timeout=8000)
+        return True
     except Exception:
-        pass
+        return False
 
-# ─── Cache de sesiones (para paginacion y detalle) ───────────────────────────
+# ─── Cache de sesiones ────────────────────────────────────────────────────────
 
 _sessions      = {}
 _sessions_lock = threading.Lock()
@@ -209,8 +207,8 @@ def fill_simple(page, texto, tipo_busqueda, ordenar):
 
 def fill_selectiva(page, texto, fecha_desde, fecha_hasta, numero, procedimiento, resumen, sede=''):
     """
-    Llena el formulario selectivo en la pagina precalentada.
-    La pagina ya esta en busquedaSelectiva.seam con el formulario listo.
+    Llena el formulario selectivo. La pagina ya esta en busquedaSelectiva.seam
+    con el formulario limpio y listo.
     """
     # Texto libre (textarea)
     if texto:
@@ -376,27 +374,25 @@ def do_search(data: dict):
         if sel_page is None:
             raise RuntimeError('No se pudo inicializar la pagina de busqueda selectiva.')
 
-        # 2. Llenar el formulario y buscar
+        # 2. Limpiar el formulario con el boton Limpiar del BJN
+        _limpiar_formulario(sel_page)
+
+        # 3. Llenar el formulario y buscar
         fill_selectiva(sel_page, texto, fecha_desde, fecha_hasta,
                        numero, procedimiento, resumen, sede)
         wait_results(sel_page)
 
-        # 3. Extraer resultados y paginacion
+        # 4. Extraer resultados y paginacion
         raw        = extract_results(sel_page)
         results    = process_raw_results(raw)
         pagination = check_pagination(sel_page)
 
-        # 4. Guardar la pagina en una sesion SEPARADA para paginacion/detalle
-        #    (la pagina precalentada sigue siendo _sel_page pero ahora apunta
-        #     a los resultados; la proxima busqueda la recargara si es necesario)
+        # 5. Guardar la pagina en una sesion para paginacion/detalle
         sid = _save_session(sel_page)
 
-        # 5. Marcar _sel_page como None para que la proxima busqueda cargue
-        #    una pagina nueva (el warmup en background la preparara)
+        # 6. Marcar _sel_page como None y cargar nueva en background
         with _sel_page_lock:
             _sel_page = None
-
-        # 6. Precalentar la proxima pagina en background
         threading.Thread(target=_warm_selectiva_bg, daemon=True).start()
 
         return results, sid, pagination
