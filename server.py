@@ -243,11 +243,10 @@ def _playwright_worker():
             wait_results(page)
             raw        = page.evaluate(EXTRACT_JS)
             pagination = page.evaluate(PAGINATION_JS)
-            # La pagina selectiva se mantiene activa (sel_page sigue siendo page)
-            # para que la proxima busqueda use Limpiar en lugar de recargar.
-            # Solo se recarga si la pagina muere (get_sel_page lo detecta).
-            sid = _save_session(page)
-            return raw, sid, pagination
+            # NO guardar sel_page en _sessions: si la sesion expira y se cierra el contexto,
+            # sel_page quedaria muerta. En cambio usamos un sid especial 'SEL_PAGE' que
+            # do_detalle y do_pagina resuelven directamente a sel_page.
+            return raw, 'SEL_PAGE', pagination
         else:
             page = new_ctx_page()
             fill_simple(page, texto, tipo_busqueda, ordenar)
@@ -258,10 +257,15 @@ def _playwright_worker():
             return raw, sid, pagination
 
     def do_pagina(sid, direction):
-        s = _get_session(sid)
-        if not s:
-            raise ValueError('Sesion expirada.')
-        page      = s['page']
+        if sid == 'SEL_PAGE':
+            page = get_sel_page()
+            if page is None:
+                raise ValueError('La pagina selectiva no esta disponible.')
+        else:
+            s = _get_session(sid)
+            if not s:
+                raise ValueError('Sesion expirada.')
+            page = s['page']
         text_pats = ['siguiente', '>>', '>'] if direction == 'next' else ['anterior', '<<', '<']
         clicked   = page.evaluate(GO_PAGE_JS, [text_pats])
         if not clicked:
@@ -275,13 +279,21 @@ def _playwright_worker():
     def do_detalle(data):
         index = int(data.get('index', 0))
         sid   = data.get('sid', '')
-        s     = _get_session(sid) if sid else None
-        if s:
-            page = s['page']
+        if sid == 'SEL_PAGE':
+            page = get_sel_page()
+            if page is None:
+                raise ValueError('La pagina selectiva no esta disponible. Busca de nuevo.')
         else:
-            raw, sid, _ = do_search(data)
-            s    = _get_session(sid)
-            page = s['page']
+            s = _get_session(sid) if sid else None
+            if s:
+                page = s['page']
+            else:
+                raw, sid, _ = do_search(data)
+                if sid == 'SEL_PAGE':
+                    page = get_sel_page()
+                else:
+                    s    = _get_session(sid)
+                    page = s['page']
 
         # En busqueda selectiva los resultados son celdas con onclick A4J.AJAX
         # que en el oncomplete llaman a window.open('/BJNPUBLICA/hojaInsumo2.seam?cid=...')
