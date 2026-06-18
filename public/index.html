@@ -35,7 +35,6 @@
     gap: 14px;
   }
   header h1 { font-size: 18px; font-weight: 600; letter-spacing: 0.3px; }
-  header span { font-size: 12px; opacity: 0.7; }
 
   .container { max-width: 1100px; margin: 0 auto; padding: 20px 16px; }
 
@@ -318,6 +317,60 @@
   }
   .bjn-link:hover { color: white; }
 
+  /* Instrucciones */
+  .instrucciones {
+    background: white;
+    border: 1px solid var(--borde);
+    border-radius: 6px;
+    margin-top: 12px;
+    overflow: hidden;
+  }
+  .instrucciones-titulo {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 16px;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--azul);
+    user-select: none;
+    transition: background 0.12s;
+  }
+  .instrucciones-titulo:hover { background: #f0f5ff; }
+  .instrucciones-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px 20px;
+    padding: 14px 16px;
+    border-top: 1px solid var(--borde);
+  }
+  .instruccion-item {
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+    font-size: 13px;
+    color: var(--extracto);
+    line-height: 1.5;
+  }
+  .instruccion-num {
+    background: var(--azul-claro);
+    color: white;
+    border-radius: 50%;
+    width: 22px;
+    height: 22px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    font-weight: 700;
+    flex-shrink: 0;
+    margin-top: 1px;
+  }
+  @media (max-width: 640px) {
+    .instrucciones-grid { grid-template-columns: 1fr; }
+  }
+
   @media (max-width: 640px) {
     .filters-row { grid-template-columns: 1fr 1fr; }
     .search-main { flex-wrap: wrap; }
@@ -334,7 +387,6 @@
 <header>
   <div>
     <h1>BJN - Base de Jurisprudencia Nacional</h1>
-    <span>Poder Judicial de la Rep. Oriental del Uruguay</span>
   </div>
   <a class="bjn-link" href="https://bjn.poderjudicial.gub.uy/" target="_blank">Abrir BJN original</a>
 </header>
@@ -386,6 +438,50 @@
 
     <!-- Historial -->
     <div id="history-simple" class="history-bar"></div>
+  </div>
+
+  <!-- Instrucciones de uso -->
+  <div class="instrucciones">
+    <div class="instrucciones-titulo" onclick="toggleInstrucciones()">
+      <span>&#9432; Cómo usar el buscador</span>
+      <span id="instrucciones-chevron" style="font-size:11px;">&#9660;</span>
+    </div>
+    <div id="instrucciones-body" style="display:none;">
+      <div class="instrucciones-grid">
+        <div class="instruccion-item">
+          <div class="instruccion-num">1</div>
+          <div>
+            <strong>Escribi el texto a buscar</strong> y presioná <em>Buscar</em> o Enter.
+            El buscador consulta el texto completo de todas las sentencias publicadas en el BJN.
+          </div>
+        </div>
+        <div class="instruccion-item">
+          <div class="instruccion-num">2</div>
+          <div>
+            <strong>Ajustá los filtros</strong> según necesites:
+            <em>Tipo de búsqueda</em> controla cómo se interpretan las palabras;
+            <em>Tipo de sentencia</em> filtra entre definitivas e interlocutorias;
+            <em>Ordenar por</em> define si ves primero los más relevantes o los más recientes.
+          </div>
+        </div>
+        <div class="instruccion-item">
+          <div class="instruccion-num">3</div>
+          <div>
+            <strong>Hacé clic en cualquier resultado</strong> para ver el texto completo de la sentencia.
+            Los términos buscados quedan resaltados en amarillo dentro del texto.
+          </div>
+        </div>
+        <div class="instruccion-item">
+          <div class="instruccion-num">4</div>
+          <div>
+            Dentro de la sentencia podés <strong>&#128203; Copiar</strong> el texto al portapapeles,
+            <strong>&#128190; Exportar .txt</strong> para descargarla como archivo,
+            o <strong>&#x2715; Cerrar</strong> para volver a los resultados.
+            El botón <strong>&#128279; Compartir</strong> copia un enlace con la búsqueda actual.
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 
   <!-- Status con timer -->
@@ -745,6 +841,15 @@ function renderResults(data) {
   if (total === 0) {
     list.innerHTML = '<div style="padding:20px; color:#666; text-align:center;">Sin resultados para los criterios ingresados.</div>';
   } else {
+    // Hint de clic solo en la primera carga de resultados
+    if (!document.getElementById('hint-clic')) {
+      const hint = document.createElement('div');
+      hint.id = 'hint-clic';
+      hint.style.cssText = 'font-size:12px; color:#6b7280; padding:6px 2px 2px; margin-bottom:4px;';
+      hint.textContent = '&#128071; Hacé clic en un resultado para ver el texto completo de la sentencia.';
+      hint.innerHTML = '&#128071; Hacé clic en un resultado para ver el texto completo de la sentencia.';
+      list.before(hint);
+    }
     resultados.forEach((r, i) => {
       const card = document.createElement('div');
       card.className = 'result-card';
@@ -864,6 +969,16 @@ function cerrarDetalle() {
   document.getElementById('detail-body').innerHTML = '';
   document.getElementById('detail-title').textContent = '';
   document.getElementById('detail-meta').textContent  = '';
+}
+
+// ─── Instrucciones ────────────────────────────────────────────────────────
+
+function toggleInstrucciones() {
+  const body    = document.getElementById('instrucciones-body');
+  const chevron = document.getElementById('instrucciones-chevron');
+  const visible = body.style.display !== 'none';
+  body.style.display    = visible ? 'none' : 'block';
+  chevron.innerHTML     = visible ? '&#9660;' : '&#9650;';
 }
 
 // ─── Inicialización ────────────────────────────────────────────────────────
