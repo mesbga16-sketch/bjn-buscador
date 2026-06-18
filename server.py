@@ -1,7 +1,7 @@
 """
 BJN Buscador - Servidor Flask + Playwright
 Busqueda de sentencias en la Base de Jurisprudencia Nacional (Uruguay)
-v3: lock de busqueda, verificacion de campos, retry automatico
+v4: pagina selectiva precalentada y reutilizable (busquedas en ~3s en vez de ~55s)
 """
 
 from flask import Flask, request, jsonify, send_from_directory, Response
@@ -47,6 +47,109 @@ def new_page():
                     _browser = None
             else:
                 raise
+
+# ─── Pagina selectiva precalentada ───────────────────────────────────────────
+# La primera carga del formulario selectivo tarda ~55s (RichFaces es lento).
+# Reutilizando la misma pagina, las busquedas siguientes tardan ~3s.
+
+_sel_page      = None
+_sel_page_lock = threading.Lock()
+_sel_warming   = False  # True mientras se esta calentando en background
+
+def _load_selectiva_page() -> bool:
+    """
+    Carga la pagina de busqueda selectiva del BJN.
+    Devuelve True si tuvo exito, False si fallo.
+    """
+    global _sel_page
+    try:
+        page = new_page()
+        page.goto(BJN_SIMPLE, wait_until='domcontentloaded', timeout=30000)
+        page.wait_for_selector('a:has-text("Selectiva")', timeout=10000)
+        page.locator('a:has-text("Selectiva")').click()
+        deadline = time.time() + 20
+        while time.time() < deadline:
+            if 'busquedaSelectiva' in page.url:
+                break
+            page.wait_for_timeout(300)
+        if 'busquedaSelectiva' not in page.url:
+            page.context.close()
+            return False
+        page.wait_for_selector(
+            'input[name*="fechaDesdeCalInputDate"], input[name*="ayudanteNumero"]',
+            timeout=60000
+        )
+        page.wait_for_timeout(1000)
+        with _sel_page_lock:
+            if _sel_page is not None:
+                try: _sel_page.context.close()
+                except: pass
+            _sel_page = page
+        return True
+    except Exception as e:
+        print(f'[WARN] Error cargando pagina selectiva: {e}')
+        return False
+
+def _warm_selectiva_bg():
+    """Calienta la pagina selectiva en un hilo de fondo."""
+    global _sel_warming
+    _sel_warming = True
+    try:
+        _load_selectiva_page()
+    finally:
+        _sel_warming = False
+
+def get_selectiva_page():
+    """
+    Devuelve la pagina selectiva precalentada.
+    Si no esta lista, carga una nueva (bloqueante).
+    """
+    global _sel_page
+    with _sel_page_lock:
+        page = _sel_page
+    if page is not None:
+        try:
+            # Verificar que la pagina sigue viva y tiene el formulario
+            if 'busquedaSelectiva' in page.url:
+                el = page.locator('input[name*="ayudanteNumero"]')
+                if el.count() > 0:
+                    return page
+        except Exception:
+            pass
+    # La pagina no esta lista o murio: cargar una nueva
+    _load_selectiva_page()
+    with _sel_page_lock:
+        return _sel_page
+
+def reset_selectiva_page():
+    """
+    Limpia todos los campos del formulario selectivo para la proxima busqueda.
+    Llama a esto despues de cada busqueda exitosa.
+    """
+    global _sel_page
+    with _sel_page_lock:
+        page = _sel_page
+    if page is None:
+        return
+    try:
+        # Limpiar todos los campos de texto/input del formulario
+        for sel in [
+            'textarea[name*="cajaQuery"]', 'textarea',
+            'input[name*="fechaDesdeCalInputDate"]',
+            'input[name*="fechaHastaCalInputDate"]',
+            'input[name*="ayudanteNumero"]',
+            'input[name*="ayudanteProc"]',
+            'input[name*="ayudanteResumen"]',
+        ]:
+            try:
+                els = page.locator(sel)
+                for i in range(els.count()):
+                    if els.nth(i).is_visible():
+                        els.nth(i).fill('')
+            except Exception:
+                pass
+    except Exception:
+        pass
 
 # ─── Cache de sesiones ────────────────────────────────────────────────────────
 
@@ -94,29 +197,10 @@ def activate_simple(page):
     page.goto(BJN_SIMPLE, wait_until='domcontentloaded', timeout=20000)
     page.wait_for_selector('#formBusqueda\\:cajaQuery', timeout=10000)
 
-def activate_selectiva(page):
-    page.goto(BJN_SIMPLE, wait_until='domcontentloaded', timeout=20000)
-    page.wait_for_selector('a:has-text("Selectiva")', timeout=10000)
-    page.locator('a:has-text("Selectiva")').click()
-    # Polling: esperar hasta que la URL cambie
-    deadline = time.time() + 15
-    while time.time() < deadline:
-        if 'busquedaSelectiva' in page.url:
-            break
-        page.wait_for_timeout(300)
-    # Esperar que el formulario este renderizado
-    page.wait_for_selector(
-        'input[name*="fechaDesdeCalInputDate"], input[name*="ayudanteNumero"]',
-        timeout=30000
-    )
-    # Pausa adicional para que RichFaces termine de inicializar los widgets
-    page.wait_for_timeout(1000)
-
 def _fill_verified(page, selector: str, value: str, max_attempts: int = 3) -> bool:
     """
-    Llena un campo y verifica que el valor quedó escrito.
-    Reintenta hasta max_attempts veces si el campo queda vacío.
-    Devuelve True si el valor quedó correctamente escrito.
+    Llena un campo y verifica que el valor quedo escrito.
+    Reintenta hasta max_attempts veces si el campo queda vacio.
     """
     for attempt in range(max_attempts):
         el = page.locator(selector)
@@ -127,7 +211,6 @@ def _fill_verified(page, selector: str, value: str, max_attempts: int = 3) -> bo
         actual = el.first.input_value()
         if actual == value:
             return True
-        # El valor no quedó: esperar un poco más y reintentar
         page.wait_for_timeout(500 * (attempt + 1))
     return False
 
@@ -144,12 +227,12 @@ def fill_simple(page, texto, tipo_busqueda, ordenar):
     page.click('#formBusqueda\\:Search')
 
 def fill_selectiva(page, texto, fecha_desde, fecha_hasta, numero, procedimiento, resumen, sede=''):
-    activate_selectiva(page)
-
-    # Texto libre (textarea). El selector real en busquedaSelectiva.seam
-    # no tiene name="cajaQuery"; es el primer textarea visible del formulario.
+    """
+    Llena el formulario selectivo en la pagina precalentada y ejecuta la busqueda.
+    La pagina ya esta en busquedaSelectiva.seam con el formulario listo.
+    """
+    # Texto libre (textarea)
     if texto:
-        # Intentar primero con el selector especifico, luego con fallback
         filled = False
         for sel in ['textarea[name*="cajaQuery"]', 'textarea[name*="query"]',
                     'textarea[name*="Query"]']:
@@ -161,7 +244,6 @@ def fill_selectiva(page, texto, fecha_desde, fecha_hasta, numero, procedimiento,
                     filled = True
                     break
         if not filled:
-            # Fallback: primer textarea visible
             textareas = page.locator('textarea')
             for i in range(textareas.count()):
                 t = textareas.nth(i)
@@ -183,7 +265,7 @@ def fill_selectiva(page, texto, fecha_desde, fecha_hasta, numero, procedimiento,
         page.locator('input[name*="fechaHastaCalInputDate"]').first.press('Tab')
         page.wait_for_timeout(1500)
 
-    # Número de sentencia
+    # Numero de sentencia
     if numero:
         _fill_verified(page, 'input[name*="ayudanteNumero"]', numero)
 
@@ -207,7 +289,7 @@ def fill_selectiva(page, texto, fecha_desde, fecha_hasta, numero, procedimiento,
             except Exception:
                 pass
 
-    # Botón Buscar
+    # Boton Buscar
     page.locator('input[name="formBusqueda:j_id20:Search"]').click()
 
 def wait_results(page):
@@ -324,18 +406,32 @@ def do_search(data: dict):
     resumen       = data.get('resumen', '').strip()
     sede          = data.get('sede', '').strip()
 
-    page = new_page()
     if modo == 'selectiva':
+        # Usar la pagina precalentada
+        page = get_selectiva_page()
+        if page is None:
+            raise RuntimeError('No se pudo inicializar la pagina de busqueda selectiva.')
         fill_selectiva(page, texto, fecha_desde, fecha_hasta, numero, procedimiento, resumen, sede)
+        wait_results(page)
+        raw        = extract_results(page)
+        results    = process_raw_results(raw)
+        pagination = check_pagination(page)
+        # Guardar snapshot de la pagina en la sesion (para paginacion y detalle)
+        # La pagina precalentada NO se cierra: se reutiliza.
+        # Para la sesion, guardamos una referencia a la misma pagina.
+        sid = _save_session(page)
+        # Limpiar el formulario en background para la proxima busqueda
+        threading.Thread(target=reset_selectiva_page, daemon=True).start()
+        return results, sid, pagination
     else:
+        page = new_page()
         fill_simple(page, texto, tipo_busqueda, ordenar)
-
-    wait_results(page)
-    raw        = extract_results(page)
-    results    = process_raw_results(raw)
-    pagination = check_pagination(page)
-    sid        = _save_session(page)
-    return results, sid, pagination
+        wait_results(page)
+        raw        = extract_results(page)
+        results    = process_raw_results(raw)
+        pagination = check_pagination(page)
+        sid        = _save_session(page)
+        return results, sid, pagination
 
 # ─── Rutas ────────────────────────────────────────────────────────────────────
 
@@ -450,13 +546,23 @@ def ver_sentencia():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+@app.route('/api/status', methods=['GET'])
+def status():
+    """Endpoint para verificar si la pagina selectiva esta precalentada."""
+    with _sel_page_lock:
+        ready = _sel_page is not None
+    return jsonify({'selectiva_ready': ready, 'warming': _sel_warming})
+
 import atexit
 
 @atexit.register
 def _shutdown():
-    global _pw, _browser
+    global _pw, _browser, _sel_page
     for s in list(_sessions.values()):
         try: s['ctx'].close()
+        except: pass
+    if _sel_page:
+        try: _sel_page.context.close()
         except: pass
     if _browser:
         try: _browser.close()
@@ -467,4 +573,7 @@ def _shutdown():
 
 if __name__ == '__main__':
     print(f'\nBJN Buscador en http://localhost:{PORT}\n')
+    # Precalentar la pagina selectiva en background al arrancar
+    print('Precalentando pagina selectiva del BJN...')
+    threading.Thread(target=_warm_selectiva_bg, daemon=True).start()
     app.run(host='0.0.0.0', port=PORT, debug=False, threaded=True)
