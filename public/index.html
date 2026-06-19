@@ -496,6 +496,22 @@
         <button class="btn-icon" onclick="compartirBusqueda()" title="Copiar enlace a esta búsqueda">&#128279; Compartir</button>
       </div>
     </div>
+    <!-- Detalle de sentencia (arriba de la lista para visibilidad inmediata) -->
+    <div id="detail-panel" class="detail-panel">
+      <div class="detail-header">
+        <div>
+          <div class="detail-title" id="detail-title"></div>
+          <div class="detail-meta" id="detail-meta"></div>
+        </div>
+        <div class="detail-actions">
+          <button class="btn-icon" onclick="copiarTexto()" title="Copiar texto completo">&#128203; Copiar</button>
+          <button class="btn-icon" onclick="exportarTxt()" title="Descargar como archivo de texto">&#128190; Exportar .txt</button>
+          <button class="btn-icon" onclick="cerrarDetalle()">&#x2715; Cerrar</button>
+        </div>
+      </div>
+      <div class="detail-body" id="detail-body"></div>
+    </div>
+
     <div class="result-list" id="result-list"></div>
 
     <!-- Paginacion -->
@@ -506,21 +522,6 @@
     </div>
   </div>
 
-  <!-- Detalle de sentencia -->
-  <div id="detail-panel" class="detail-panel">
-    <div class="detail-header">
-      <div>
-        <div class="detail-title" id="detail-title"></div>
-        <div class="detail-meta" id="detail-meta"></div>
-      </div>
-      <div class="detail-actions">
-        <button class="btn-icon" onclick="copiarTexto()" title="Copiar texto completo">&#128203; Copiar</button>
-        <button class="btn-icon" onclick="exportarTxt()" title="Descargar como archivo de texto">&#128190; Exportar .txt</button>
-        <button class="btn-icon" onclick="cerrarDetalle()">&#x2715; Cerrar</button>
-      </div>
-    </div>
-    <div class="detail-body" id="detail-body"></div>
-  </div>
 
 </div>
 
@@ -902,8 +903,20 @@ async function cargarDetalle(index, cardEl) {
 
   const payload = { index };
 
+  // Mostrar panel de carga INMEDIATAMENTE y hacer scroll hacia él
+  const panel = document.getElementById('detail-panel');
+  document.getElementById('detail-title').textContent = 'Cargando sentencia...';
+  document.getElementById('detail-meta').textContent = 'Esto puede tardar hasta 20 segundos';
+  document.getElementById('detail-body').innerHTML =
+    '<div style="text-align:center;padding:40px;color:#666;">'
+    + '<div style="font-size:28px;margin-bottom:12px;">⏳</div>'
+    + '<div>Consultando el BJN, por favor esperá...</div>'
+    + '</div>';
+  panel.classList.add('active');
+  // Scroll inmediato al panel antes de que llegue la respuesta
+  setTimeout(() => panel.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50);
+
   setStatus('Cargando texto de la sentencia...', 'loading');
-  cerrarDetalle();
 
   try {
     const r    = await fetch('/api/detalle', {
@@ -933,12 +946,15 @@ async function cargarDetalle(index, cardEl) {
       body.textContent = data.detalle || '(Sin texto disponible)';
     }
 
-    const panel = document.getElementById('detail-panel');
-    panel.classList.add('active');
+    // Scroll al inicio del panel con el texto ya cargado
     panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
   } catch (e) {
-    setStatus('Error al cargar detalle: ' + e.message, 'error');
+    document.getElementById('detail-body').innerHTML =
+      `<div style="color:#c0392b;padding:16px;">Error: ${e.message}</div>`;
+    document.getElementById('detail-title').textContent = 'Error al cargar la sentencia';
+    document.getElementById('detail-meta').textContent = '';
+    setStatus('', '');
   }
 }
 
