@@ -324,6 +324,144 @@ def status():
     return jsonify({'ok': False})
 
 
+# ─── MCP Server (Streamable HTTP) ─────────────────────────────────────────────
+# Expone las herramientas de búsqueda en /mcp para usar desde Claude Code.
+# Configuración en ~/.claude/settings.json:
+#   { "mcpServers": { "bjn": { "type": "http", "url": "https://bjn-buscador.onrender.com/mcp" } } }
+
+import httpx as _httpx
+from mcp.server.fastmcp import FastMCP as _FastMCP
+
+_mcp = _FastMCP(
+    'BJN Jurisprudencia',
+    instructions=(
+        'Buscador de sentencias del Poder Judicial de Uruguay (BJN). '
+        'Usa buscar_jurisprudencia para encontrar sentencias. '
+        'Usa obtener_detalle con el index del resultado para leer el texto completo. '
+        'Usa navegar_pagina con next o prev para paginar resultados.'
+    ),
+)
+
+_LOCAL = f'http://127.0.0.1:{PORT}'
+
+_TIPO_MAP = {'todas': 'TODAS_LAS_PALABRAS', 'frase': 'FRASE_EXACTA', 'alguna': 'ALGUNA_PALABRA'}
+_ORDEN_MAP = {'relevancia': 'RELEVANCIA', 'fecha': 'FECHA'}
+
+
+def _poll_local(job_id: str, timeout: int = 90) -> dict:
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        r = _httpx.get(f'{_LOCAL}/api/job/{job_id}', timeout=30)
+        r.raise_for_status()
+        data = r.json()
+        if data.get('status') in ('done', 'error'):
+            return data
+        time.sleep(3)
+    raise TimeoutError(f'Job {job_id} no termino en {timeout}s')
+
+
+def _fmt(results: list) -> str:
+    lines = []
+    for r in results:
+        num = r.get('numero') or r.get('titulo', '?')
+        lines.append(
+            f"[index={r.get('index','?')}] **{num}** — {r.get('tipo','')} | {r.get('tribunal','')}\n"
+            f"{r.get('proceso','')}\n{r.get('extracto','')[:400]}\n"
+        )
+    return '\n'.join(lines)
+
+
+@_mcp.tool()
+def buscar_jurisprudencia(texto: str, modo: str = 'todas', orden: str = 'relevancia') -> str:
+    """
+    Busca sentencias en la Base de Jurisprudencia Nacional (BJN) de Uruguay.
+
+    Args:
+        texto: Palabras clave o frase a buscar.
+        modo: 'todas' (todas las palabras), 'frase' (frase exacta) o 'alguna' (alguna palabra).
+        orden: 'relevancia' o 'fecha'.
+
+    Returns:
+        Lista de sentencias con su index, número, tribunal y extracto.
+    """
+    payload = {
+        'texto': texto,
+        'tipoBusqueda': _TIPO_MAP.get(modo, 'TODAS_LAS_PALABRAS'),
+        'ordenar': _ORDEN_MAP.get(orden, 'RELEVANCIA'),
+    }
+    r = _httpx.post(f'{_LOCAL}/api/buscar', json=payload, timeout=30)
+    r.raise_for_status()
+    data = _poll_local(r.json()['job_id'])
+    if data.get('status') == 'error':
+        return f"Error: {data.get('error', 'desconocido')}"
+    results = data.get('results', [])
+    if not results:
+        return f"No se encontraron sentencias para: {texto!r}"
+    extra = '\n(Hay más resultados — usa navegar_pagina("next"))' if data.get('pagination', {}).get('hasNext') else ''
+    return f"Se encontraron {data.get('total', len(results))} sentencias para '{texto}':\n\n" + _fmt(results) + extra
+
+
+@_mcp.tool()
+def obtener_detalle(index: int) -> str:
+    """
+    Obtiene el texto completo de una sentencia. Usar después de buscar_jurisprudencia.
+
+    Args:
+        index: El número de index devuelto por buscar_jurisprudencia.
+
+    Returns:
+        Texto completo de la sentencia.
+    """
+    r = _httpx.post(f'{_LOCAL}/api/detalle', json={'index': index}, timeout=30)
+    r.raise_for_status()
+    data = _poll_local(r.json()['job_id'], timeout=120)
+    if data.get('status') == 'error':
+        return f"Error: {data.get('error', 'desconocido')}"
+    detalle = data.get('detalle', '')
+    if not detalle:
+        return f'No hay texto publicado para la sentencia con index={index}.'
+    return f"**{data.get('titulo', '')}**\n\n{detalle}"
+
+
+@_mcp.tool()
+def navegar_pagina(direccion: str = 'next') -> str:
+    """
+    Navega entre páginas de resultados. Usar después de buscar_jurisprudencia.
+
+    Args:
+        direccion: 'next' para la página siguiente, 'prev' para la anterior.
+
+    Returns:
+        Lista de sentencias de la nueva página.
+    """
+    if direccion not in ('next', 'prev'):
+        return "La dirección debe ser 'next' o 'prev'."
+    r = _httpx.post(f'{_LOCAL}/api/pagina', json={'direction': direccion}, timeout=30)
+    r.raise_for_status()
+    data = _poll_local(r.json()['job_id'])
+    if data.get('status') == 'error':
+        return f"Error: {data.get('error', 'desconocido')}"
+    results = data.get('results', [])
+    if not results:
+        return 'No hay más resultados en esa dirección.'
+    return _fmt(results)
+
+
+# App ASGI combinada: /mcp → MCP, todo lo demás → Flask
+from a2wsgi import WSGIMiddleware as _WSGIMiddleware
+
+_flask_asgi = _WSGIMiddleware(app)
+_mcp_asgi   = _mcp.streamable_http_app()
+
+
+async def combined_app(scope, receive, send):
+    path = scope.get('path', '')
+    if scope.get('type') in ('http', 'websocket') and path.startswith('/mcp'):
+        await _mcp_asgi(scope, receive, send)
+    else:
+        await _flask_asgi(scope, receive, send)
+
+
 # ─── Arranque ─────────────────────────────────────────────────────────────────
 
 _worker_thread = threading.Thread(
@@ -331,5 +469,6 @@ _worker_thread = threading.Thread(
 _worker_thread.start()
 
 if __name__ == '__main__':
-    print(f'\nBJN Buscador en http://localhost:{PORT}\n')
-    app.run(host='0.0.0.0', port=PORT, debug=False, threaded=True)
+    import uvicorn
+    print(f'\nBJN Buscador + MCP en http://localhost:{PORT}\n')
+    uvicorn.run(combined_app, host='0.0.0.0', port=PORT)
