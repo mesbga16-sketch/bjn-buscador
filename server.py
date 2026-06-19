@@ -308,6 +308,55 @@ _worker_thread = threading.Thread(
     target=_playwright_worker, daemon=True, name='playwright-worker')
 _worker_thread.start()
 
+
+@app.route('/api/debug/popup', methods=['POST'])
+def api_debug_popup():
+    """Endpoint de debug: devuelve el HTML completo del popup para un resultado."""
+    data = request.get_json(force=True)
+    index = int(data.get('index', 0))
+    job_id = str(uuid.uuid4())
+    jobs[job_id] = {'status': 'pending'}
+    def run():
+        try:
+            with worker_lock:
+                links = page.query_selector_all('a[onclick*="lnkTituloSentencia"]')
+                if not links or index >= len(links):
+                    jobs[job_id] = {'status': 'error', 'error': 'No links'}
+                    return
+                popup_page = None
+                try:
+                    with ctx.expect_page(timeout=20000) as popup_info:
+                        links[index].click()
+                    popup_page = popup_info.value
+                    popup_page.wait_for_load_state('domcontentloaded', timeout=15000)
+                    try:
+                        popup_page.wait_for_load_state('networkidle', timeout=8000)
+                    except Exception:
+                        pass
+                    url = popup_page.url
+                    html = popup_page.content()
+                    inner = popup_page.evaluate('() => document.body.innerText')
+                    textc = popup_page.evaluate('() => document.body.textContent')
+                    popup_page.close()
+                    jobs[job_id] = {
+                        'status': 'done',
+                        'url': url,
+                        'html_len': len(html),
+                        'inner_len': len(inner),
+                        'textc_len': len(textc),
+                        'inner_preview': inner[:500],
+                        'html_preview': html[:1000]
+                    }
+                except Exception as e:
+                    if popup_page:
+                        try: popup_page.close()
+                        except: pass
+                    jobs[job_id] = {'status': 'error', 'error': str(e)}
+        except Exception as e:
+            jobs[job_id] = {'status': 'error', 'error': str(e)}
+    threading.Thread(target=run, daemon=True).start()
+    return jsonify({'job_id': job_id})
+
 if __name__ == '__main__':
     print(f'\nBJN Buscador en http://localhost:{PORT}\n')
     app.run(host='0.0.0.0', port=PORT, debug=False, threaded=True)
