@@ -151,7 +151,12 @@ def _playwright_worker():
                 links[index].click()
             popup_page = popup_info.value
             popup_page.wait_for_load_state('domcontentloaded', timeout=15000)
-        except Exception:
+            # Esperar a que el AJAX de la pagina de detalle termine de cargar
+            try:
+                popup_page.wait_for_load_state('networkidle', timeout=8000)
+            except Exception:
+                pass  # networkidle puede no alcanzarse, continuar igual
+        except Exception as e_popup:
             # Si no se abre popup, la sentencia no tiene texto publicado
             if popup_page:
                 try:
@@ -164,8 +169,14 @@ def _playwright_worker():
         try:
             detalle_text = popup_page.evaluate("""() => {
                 const box = document.getElementById('textoSentenciaBox');
-                if (box) return box.innerText.trim();
-                return document.body.innerText.trim();
+                if (box) {
+                    const t = box.innerText.trim() || box.textContent.trim();
+                    return t;
+                }
+                // Fallback: usar textContent (funciona aunque el elemento este oculto)
+                const inner = document.body.innerText.trim();
+                if (inner) return inner;
+                return document.body.textContent.trim();
             }""")
         finally:
             popup_page.close()
