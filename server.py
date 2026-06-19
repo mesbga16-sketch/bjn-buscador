@@ -1,27 +1,47 @@
 """
 BJN Buscador - Servidor Flask + Playwright
-Busqueda de sentencias en la Base de Jurisprudencia Nacional (Uruguay)
-v9: arquitectura simplificada con contexto persistente reutilizable.
+v10: arquitectura de jobs asincronos.
+- POST /api/buscar  -> devuelve {job_id} inmediatamente (no bloquea)
+- GET  /api/job/:id -> devuelve {status:'pending'|'done'|'error', result, error}
+- POST /api/detalle -> idem
+- POST /api/pagina  -> idem
+Esto evita el timeout de 30s de Render en plan gratuito.
 """
 
 from flask import Flask, request, jsonify, send_from_directory
-import re, os, time, threading, queue
+import re, os, uuid, threading, queue
 
 app = Flask(__name__, static_folder='public')
 PORT = int(os.environ.get('PORT', 3737))
 
 BJN_SIMPLE = 'https://bjn.poderjudicial.gub.uy/BJNPUBLICA/busquedaSimple.seam'
 
-# ─── Worker thread dedicado para Playwright ───────────────────────────────────
-# Playwright sync API no puede usarse desde multiples threads.
-# Solucion: un unico thread que procesa todas las operaciones del browser.
+# ─── Job store ────────────────────────────────────────────────────────────────
+# Diccionario {job_id: {'status': 'pending'|'done'|'error', 'result': ..., 'error': ...}}
+_jobs = {}
+_jobs_lock = threading.Lock()
 
+def _new_job():
+    jid = str(uuid.uuid4())
+    with _jobs_lock:
+        _jobs[jid] = {'status': 'pending', 'result': None, 'error': None}
+    return jid
+
+def _finish_job(jid, result=None, error=None):
+    with _jobs_lock:
+        if jid in _jobs:
+            _jobs[jid]['status'] = 'done' if result is not None else 'error'
+            _jobs[jid]['result'] = result
+            _jobs[jid]['error']  = error
+
+# ─── Worker thread dedicado para Playwright ───────────────────────────────────
 _task_queue = queue.Queue()
 
 # Estado compartido (solo escrito/leido desde el worker thread)
 _state = {
-    'page': None,       # Pagina de resultados actual (reutilizada entre busquedas)
-    'last_url': None,   # URL de la pagina de resultados actual
+    'page': None,
+    'last_url': None,
+    'ctx': None,
 }
 
 def _playwright_worker():
@@ -32,6 +52,7 @@ def _playwright_worker():
     ctx     = browser.new_context(locale='es-UY')
     page    = ctx.new_page()
     _state['page'] = page
+    _state['ctx']  = ctx
 
     # ── JavaScript helpers ────────────────────────────────────────────────────
 
@@ -70,7 +91,7 @@ def _playwright_worker():
 
     def wait_results():
         try:
-            page.wait_for_selector('a[onclick*="lnkTituloSentencia"]', timeout=20000)
+            page.wait_for_selector('a[onclick*="lnkTituloSentencia"]', timeout=25000)
         except Exception:
             pass
 
@@ -79,8 +100,8 @@ def _playwright_worker():
         tipo_busqueda = data.get('tipoBusqueda', 'TODAS_LAS_PALABRAS')
         ordenar       = data.get('ordenar', 'RELEVANCIA')
 
-        page.goto(BJN_SIMPLE, wait_until='domcontentloaded', timeout=25000)
-        page.wait_for_selector('#formBusqueda\\:cajaQuery', timeout=10000)
+        page.goto(BJN_SIMPLE, wait_until='domcontentloaded', timeout=35000)
+        page.wait_for_selector('#formBusqueda\\:cajaQuery', timeout=15000)
         if texto:
             page.fill('#formBusqueda\\:cajaQuery', texto)
         checked = page.eval_on_selector('#formBusqueda\\:chkMasOpciones', 'el => el.checked')
@@ -112,8 +133,8 @@ def _playwright_worker():
     def do_detalle(index):
         """
         Obtiene el texto completo de la sentencia en la posicion 'index'.
-        Estrategia optimizada: interceptar window.open, capturar URL con polling rapido,
-        abrir la sentencia en una pagina nueva (sin tocar la pagina de resultados).
+        Estrategia: interceptar window.open, polling rapido para capturar URL,
+        abrir la sentencia en pagina nueva (sin tocar la pagina de resultados).
         """
         links = page.query_selector_all('a[onclick*="lnkTituloSentencia"]')
         if not links or index >= len(links):
@@ -145,7 +166,6 @@ def _playwright_worker():
             popup_url = f'https://bjn.poderjudicial.gub.uy{popup_url}'
 
         # Abrir la sentencia en una pagina nueva del mismo contexto
-        # (la pagina de resultados queda intacta para la proxima operacion)
         sentencia_page = ctx.new_page()
         try:
             sentencia_page.goto(popup_url, wait_until='domcontentloaded', timeout=20000)
@@ -165,37 +185,31 @@ def _playwright_worker():
         task = _task_queue.get()
         if task is None:
             break
-        holder = task.get('result')
+        jid = task.get('jid')
         try:
             t = task['type']
             if t == 'status':
-                holder['value'] = {'ok': True}
+                _finish_job(jid, result={'ok': True})
             elif t == 'search':
                 raw, pagination = do_search(task['data'])
-                holder['value'] = {'raw': raw, 'pagination': pagination}
+                results = process_raw_results(raw)
+                _finish_job(jid, result={
+                    'results': results, 'total': len(results),
+                    'query': task['data'].get('texto', ''),
+                    'pagination': pagination
+                })
             elif t == 'pagina':
                 raw, pagination = do_pagina(task['direction'])
-                holder['value'] = {'raw': raw, 'pagination': pagination}
+                results = process_raw_results(raw)
+                _finish_job(jid, result={
+                    'results': results, 'total': len(results),
+                    'pagination': pagination
+                })
             elif t == 'detalle':
-                holder['value'] = do_detalle(task['index'])
+                res = do_detalle(task['index'])
+                _finish_job(jid, result=res)
         except Exception as e:
-            holder['error'] = str(e)
-        finally:
-            if holder and 'event' in holder:
-                holder['event'].set()
-
-
-def _call_worker(task_dict, timeout=28):
-    ev = threading.Event()
-    holder = {'event': ev, 'value': None, 'error': None}
-    task_dict['result'] = holder
-    _task_queue.put(task_dict)
-    ev.wait(timeout=timeout)
-    if not ev.is_set():
-        raise TimeoutError('El worker no respondio a tiempo.')
-    if holder['error']:
-        raise RuntimeError(holder['error'])
-    return holder['value']
+            _finish_job(jid, error=str(e))
 
 
 # ─── Helpers de resultados ────────────────────────────────────────────────────
@@ -217,49 +231,71 @@ def process_raw_results(raw: list) -> list:
 def index():
     return send_from_directory('public', 'index.html')
 
+@app.route('/api/job/<jid>', methods=['GET'])
+def get_job(jid):
+    with _jobs_lock:
+        job = _jobs.get(jid)
+    if not job:
+        return jsonify({'status': 'not_found'}), 404
+    if job['status'] == 'pending':
+        return jsonify({'status': 'pending'})
+    if job['status'] == 'error':
+        # Limpiar el job despues de leerlo
+        with _jobs_lock:
+            _jobs.pop(jid, None)
+        return jsonify({'status': 'error', 'error': job['error']}), 500
+    # done
+    result = job['result']
+    with _jobs_lock:
+        _jobs.pop(jid, None)
+    return jsonify({'status': 'done', **result})
+
+def _submit_job(task_dict):
+    jid = _new_job()
+    task_dict['jid'] = jid
+    _task_queue.put(task_dict)
+    return jid
+
 @app.route('/api/buscar', methods=['POST'])
 def buscar():
     data = request.get_json() or {}
     if not data.get('texto', '').strip():
         return jsonify({'error': 'Ingrese un texto para buscar.'}), 400
-    try:
-        res     = _call_worker({'type': 'search', 'data': data})
-        results = process_raw_results(res['raw'])
-        return jsonify({'results': results, 'total': len(results),
-                        'query': data.get('texto', ''),
-                        'pagination': res['pagination']})
-    except Exception as e:
-        return jsonify({'error': f'Error al consultar el BJN: {str(e)}'}), 500
+    jid = _submit_job({'type': 'search', 'data': data})
+    return jsonify({'job_id': jid})
 
 @app.route('/api/pagina', methods=['POST'])
 def pagina():
     data      = request.get_json() or {}
     direction = data.get('direction', 'next')
-    try:
-        res     = _call_worker({'type': 'pagina', 'direction': direction})
-        results = process_raw_results(res['raw'])
-        return jsonify({'results': results, 'total': len(results),
-                        'pagination': res['pagination']})
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
+    jid = _submit_job({'type': 'pagina', 'direction': direction})
+    return jsonify({'job_id': jid})
 
 @app.route('/api/detalle', methods=['POST'])
 def detalle():
     data  = request.get_json() or {}
     index = int(data.get('index', 0))
-    try:
-        res = _call_worker({'type': 'detalle', 'index': index}, timeout=28)
-        return jsonify(res)
-    except Exception as e:
-        return jsonify({'error': f'Error al cargar la sentencia: {str(e)}'}), 500
+    jid = _submit_job({'type': 'detalle', 'index': index})
+    return jsonify({'job_id': jid})
 
 @app.route('/api/status', methods=['GET'])
 def status():
-    try:
-        _call_worker({'type': 'status'}, timeout=3)
-        return jsonify({'ok': True})
-    except Exception:
-        return jsonify({'ok': False})
+    # Status es sincrono y rapido (no necesita job)
+    jid = _new_job()
+    _task_queue.put({'type': 'status', 'jid': jid})
+    # Esperar max 3s
+    import time
+    for _ in range(15):
+        time.sleep(0.2)
+        with _jobs_lock:
+            job = _jobs.get(jid, {})
+        if job.get('status') != 'pending':
+            with _jobs_lock:
+                _jobs.pop(jid, None)
+            return jsonify({'ok': job.get('status') == 'done'})
+    with _jobs_lock:
+        _jobs.pop(jid, None)
+    return jsonify({'ok': False})
 
 
 # ─── Arranque ─────────────────────────────────────────────────────────────────

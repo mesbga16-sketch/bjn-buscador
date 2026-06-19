@@ -681,6 +681,27 @@ function compartirBusqueda() {
 
 // ─── Búsqueda ──────────────────────────────────────────────────────────────
 
+// ─── Sistema de jobs asíncronos ────────────────────────────────────────────
+// El servidor devuelve un job_id inmediatamente y el cliente hace polling.
+// Esto evita el timeout de 30s de Render en plan gratuito.
+
+async function pollJob(jobId, { onProgress, maxWaitMs = 120000, intervalMs = 2000 } = {}) {
+  const deadline = Date.now() + maxWaitMs;
+  let elapsed = 0;
+  while (Date.now() < deadline) {
+    await new Promise(res => setTimeout(res, intervalMs));
+    elapsed += intervalMs;
+    if (onProgress) onProgress(elapsed);
+    const r    = await fetch(`/api/job/${jobId}`);
+    const data = await r.json();
+    if (data.status === 'pending') continue;
+    if (data.status === 'error') throw new Error(data.error || 'Error desconocido');
+    if (data.status === 'done') return data;
+    throw new Error('Estado desconocido: ' + data.status);
+  }
+  throw new Error('La búsqueda tardó demasiado. Intentá de nuevo.');
+}
+
 async function buscar() {
   const payload = buildPayload();
   if (!payload.texto) {
@@ -693,56 +714,30 @@ async function buscar() {
   document.getElementById('results-area').style.display = 'none';
   cerrarDetalle();
 
-  for (let intento = 1; intento <= 3; intento++) {
-    if (intento > 1) {
-      setStatus(`El servidor está iniciando. Reintentando (${intento-1}/2)...`, 'loading');
-      await new Promise(res => setTimeout(res, 5000));
-    }
-    try {
-      const r    = await fetch('/api/buscar', {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify(payload),
-      });
-      const text = await r.text();
-      if (!text || !text.trim()) {
-        if (intento < 2) continue;
-        setStatus('El servidor tardó demasiado. Intentá de nuevo en unos segundos.', 'error');
-        return;
+  try {
+    // Enviar búsqueda — el servidor responde en <1s con un job_id
+    const r = await fetch('/api/buscar', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify(payload),
+    });
+    const init = await r.json();
+    if (!r.ok || !init.job_id) throw new Error(init.error || 'Error al iniciar la búsqueda');
+
+    // Polling hasta que el resultado esté listo
+    const data = await pollJob(init.job_id, {
+      onProgress: (ms) => {
+        const s = Math.round(ms / 1000);
+        setStatus(`Consultando el BJN... (${s}s)`, 'loading');
       }
-      let data;
-      try { data = JSON.parse(text); }
-      catch {
-        if (intento < 2) continue;
-        setStatus('El servidor tardó demasiado. Intentá de nuevo en unos segundos.', 'error');
-        return;
-      }
-      if (!r.ok) {
-        const msg = data.error || 'Error desconocido';
-        // Si el worker estaba ocupado o hibernando, reintentar automáticamente
-        if (intento < 2 && (msg.includes('worker') || msg.includes('tiempo') || msg.includes('ocupado'))) {
-          setStatus('El servidor está iniciando. Reintentando en 5 segundos...', 'loading');
-          await new Promise(res => setTimeout(res, 5000));
-          continue;
-        }
-        throw new Error(msg);
-      }
-      // sid eliminado: el backend usa contexto persistente
-      histAdd(payload);
-      setStatus('', '');
-      // Limpiar la URL para que al refrescar no se vuelva a buscar
-      history.replaceState(null, '', window.location.pathname);
-      renderResults(data);
-      return;
-    } catch (e) {
-      if (intento < 2 && (e.message.includes('JSON') || e.message.includes('worker') || e.message.includes('tiempo'))) {
-        setStatus('El servidor está iniciando. Reintentando en 5 segundos...', 'loading');
-        await new Promise(res => setTimeout(res, 5000));
-        continue;
-      }
-      setStatus('Error: ' + e.message, 'error');
-      return;
-    }
+    });
+
+    histAdd(payload);
+    setStatus('', '');
+    history.replaceState(null, '', window.location.pathname);
+    renderResults(data);
+  } catch (e) {
+    setStatus('Error: ' + e.message, 'error');
   }
 }
 
@@ -758,13 +753,16 @@ async function cambiarPagina(direction) {
       headers: { 'Content-Type': 'application/json' },
       body:    JSON.stringify({ direction }),
     });
-    const text = await r.text();
-    if (!text || !text.trim()) {
-      setStatus('El servidor tardó demasiado. Intentá de nuevo.', 'error');
-      return;
-    }
-    const data = JSON.parse(text);
-    if (!r.ok) throw new Error(data.error || 'Error');
+    const init = await r.json();
+    if (!r.ok || !init.job_id) throw new Error(init.error || 'Error al cambiar página');
+
+    const data = await pollJob(init.job_id, {
+      onProgress: (ms) => {
+        const s = Math.round(ms / 1000);
+        setStatus(`Cargando página... (${s}s)`, 'loading');
+      }
+    });
+
     setStatus('', '');
     renderResults(data);
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -963,10 +961,18 @@ async function cargarDetalle(index, cardEl) {
       headers: { 'Content-Type': 'application/json' },
       body:    JSON.stringify(payload),
     });
-    const text = await r.text();
-    if (!text || !text.trim()) throw new Error('El servidor tardó demasiado. Intentá de nuevo.');
-    const data = JSON.parse(text);
-    if (!r.ok) throw new Error(data.error || 'Error');
+    const init = await r.json();
+    if (!r.ok || !init.job_id) throw new Error(init.error || 'Error al cargar la sentencia');
+
+    const data = await pollJob(init.job_id, {
+      onProgress: (ms) => {
+        const s = Math.round(ms / 1000);
+        document.getElementById('detail-meta').textContent =
+          `Consultando el BJN... (${s}s)`;
+      },
+      maxWaitMs: 60000,
+      intervalMs: 1500
+    });
 
     setStatus('', '');
 
