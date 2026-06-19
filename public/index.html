@@ -726,7 +726,7 @@ async function buscar() {
         }
         throw new Error(msg);
       }
-      sessionId = data.sid || null;
+      // sid eliminado: el backend usa contexto persistente
       histAdd(payload);
       setStatus('', '');
       // Limpiar la URL para que al refrescar no se vuelva a buscar
@@ -748,7 +748,6 @@ async function buscar() {
 // ─── Paginación ────────────────────────────────────────────────────────────
 
 async function cambiarPagina(direction) {
-  if (!sessionId) return;
   setStatus('Cargando página...', 'loading');
   document.getElementById('result-list').innerHTML = '';
 
@@ -756,7 +755,7 @@ async function cambiarPagina(direction) {
     const r    = await fetch('/api/pagina', {
       method:  'POST',
       headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify({ sid: sessionId, direction }),
+      body:    JSON.stringify({ direction }),
     });
     const text = await r.text();
     if (!text || !text.trim()) {
@@ -901,7 +900,7 @@ async function cargarDetalle(index, cardEl) {
   document.querySelectorAll('.result-card').forEach(c => c.classList.remove('selected'));
   if (cardEl) cardEl.classList.add('selected');
 
-  const payload = { ...ultimaBusqueda, index, sid: sessionId };
+  const payload = { index };
 
   setStatus('Cargando texto de la sentencia...', 'loading');
   cerrarDetalle();
