@@ -4,6 +4,7 @@ Fuente: https://bjn-buscador.onrender.com/
 """
 
 import asyncio
+import json
 import os
 import httpx
 from mcp.server.fastmcp import FastMCP
@@ -13,6 +14,39 @@ mcp = FastMCP("BJN - Jurisprudencia Uruguay")
 BASE_URL = "https://bjn-buscador.onrender.com"
 POLL_INTERVAL = 3
 MAX_POLLS = 30
+
+SERVER_CARD = {
+    "serverInfo": {"name": "BJN - Jurisprudencia Uruguay", "version": "1.0.0"},
+    "authentication": {"required": False},
+    "tools": [
+        {
+            "name": "buscar_sentencias",
+            "description": "Busca sentencias judiciales en la Base de Jurisprudencia Nacional (BJN) de Uruguay por texto libre, con filtros de tipo y orden.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "texto": {"type": "string", "description": "Texto a buscar"},
+                    "tipo_busqueda": {"type": "string", "enum": ["todas", "exacta", "alguna", "maximizar"], "default": "todas"},
+                    "tipo_sentencia": {"type": "string", "enum": ["", "DEFINITIVA", "INTERLOCUTORIA"], "default": ""},
+                    "orden": {"type": "string", "enum": ["relevancia", "reciente", "antiguo"], "default": "relevancia"},
+                },
+                "required": ["texto"],
+            },
+        },
+        {
+            "name": "obtener_detalle_sentencia",
+            "description": "Obtiene el texto completo de una sentencia de los últimos resultados de búsqueda.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "indice": {"type": "integer", "description": "Posición en los resultados (0 = primera)", "default": 0}
+                },
+            },
+        },
+    ],
+    "resources": [],
+    "prompts": [],
+}
 
 
 async def _esperar_job(client: httpx.AsyncClient, job_id: str) -> dict:
@@ -91,7 +125,22 @@ async def obtener_detalle_sentencia(indice: int = 0) -> str:
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8000))
     if os.environ.get("PORT"):
+        from starlette.applications import Starlette
+        from starlette.requests import Request
+        from starlette.responses import JSONResponse, Response
+        from starlette.routing import Mount, Route
         import uvicorn
-        uvicorn.run(mcp.sse_app(), host="0.0.0.0", port=port)
+
+        async def server_card(request: Request) -> Response:
+            return JSONResponse(SERVER_CARD)
+
+        mcp_app = mcp.streamable_http_app()
+
+        app = Starlette(routes=[
+            Route("/.well-known/mcp/server-card.json", server_card),
+            Mount("/", app=mcp_app),
+        ])
+
+        uvicorn.run(app, host="0.0.0.0", port=port)
     else:
         mcp.run(transport="stdio")
