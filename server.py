@@ -1,6 +1,6 @@
 """
 BJN Buscador - Servidor Flask + Playwright
-v10: arquitectura de jobs asincronos.
+v11: fix do_detalle - usar ctx.expect_page() para capturar popup real del BJN.
 - POST /api/buscar  -> devuelve {job_id} inmediatamente (no bloquea)
 - GET  /api/job/:id -> devuelve {status:'pending'|'done'|'error', result, error}
 - POST /api/detalle -> idem
@@ -133,49 +133,42 @@ def _playwright_worker():
     def do_detalle(index):
         """
         Obtiene el texto completo de la sentencia en la posicion 'index'.
-        Estrategia: interceptar window.open, polling rapido para capturar URL,
-        abrir la sentencia en pagina nueva (sin tocar la pagina de resultados).
+        Estrategia: usar ctx.expect_page() para capturar el popup real que el BJN abre
+        via window.open en el oncomplete del AJAX. Esto es mas robusto que interceptar
+        window.open manualmente porque el popup se abre con el estado de sesion correcto.
         """
         links = page.query_selector_all('a[onclick*="lnkTituloSentencia"]')
         if not links or index >= len(links):
             raise ValueError('Resultado no encontrado.')
         titulo = links[index].inner_text().strip()
 
-        # Interceptar window.open ANTES del clic
-        page.evaluate("""() => {
-            window._capturedPopupUrl = null;
-            window.open = function(url, name, features) {
-                window._capturedPopupUrl = url;
-                return { focus: () => {}, closed: false };
-            };
-        }""")
-
-        # Hacer clic y esperar la URL con polling rapido (max 6s)
-        links[index].click()
-        popup_url = None
-        for _ in range(30):  # 30 x 200ms = 6s max
-            page.wait_for_timeout(200)
-            popup_url = page.evaluate('() => window._capturedPopupUrl')
-            if popup_url:
-                break
-
-        if not popup_url:
-            raise ValueError('No se pudo obtener la URL de la sentencia. Intentá de nuevo.')
-
-        if popup_url.startswith('/'):
-            popup_url = f'https://bjn.poderjudicial.gub.uy{popup_url}'
-
-        # Abrir la sentencia en una pagina nueva del mismo contexto
-        sentencia_page = ctx.new_page()
+        # Capturar el popup real que el BJN abre via window.open
+        # El BJN hace AJAX primero y luego llama window.open en el oncomplete
+        # expect_page espera hasta que se abra una nueva pagina (timeout=20s)
+        popup_page = None
         try:
-            sentencia_page.goto(popup_url, wait_until='domcontentloaded', timeout=20000)
-            detalle_text = sentencia_page.evaluate("""() => {
+            with ctx.expect_page(timeout=20000) as popup_info:
+                links[index].click()
+            popup_page = popup_info.value
+            popup_page.wait_for_load_state('domcontentloaded', timeout=15000)
+        except Exception:
+            # Si no se abre popup, la sentencia no tiene texto publicado
+            if popup_page:
+                try:
+                    popup_page.close()
+                except Exception:
+                    pass
+            raise ValueError('Esta sentencia no tiene texto publicado en el BJN.')
+
+        popup_url = popup_page.url
+        try:
+            detalle_text = popup_page.evaluate("""() => {
                 const box = document.getElementById('textoSentenciaBox');
                 if (box) return box.innerText.trim();
                 return document.body.innerText.trim();
             }""")
         finally:
-            sentencia_page.close()
+            popup_page.close()
 
         return {'titulo': titulo, 'detalle': detalle_text, 'popup_url': popup_url}
 

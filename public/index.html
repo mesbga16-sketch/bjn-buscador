@@ -995,10 +995,15 @@ async function cargarDetalle(index, cardEl) {
     panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
   } catch (e) {
-    document.getElementById('detail-body').innerHTML =
-      `<div style="color:#c0392b;padding:16px;">Error: ${e.message}</div>`;
-    document.getElementById('detail-title').textContent = 'Error al cargar la sentencia';
-    document.getElementById('detail-meta').textContent = '';
+    const msg = e.message || '';
+    const sinTexto = msg.includes('no tiene texto publicado');
+    document.getElementById('detail-body').innerHTML = sinTexto
+      ? `<div style="color:#6b7280;padding:16px;font-style:italic;">Esta sentencia no tiene texto publicado en el BJN. Solo está disponible la ficha de metadata.</div>`
+      : `<div style="color:#c0392b;padding:16px;">Error: ${msg}</div>`;
+    document.getElementById('detail-title').textContent = sinTexto
+      ? (document.getElementById('detail-title').textContent || 'Sentencia sin texto')
+      : 'Error al cargar la sentencia';
+    document.getElementById('detail-meta').textContent = sinTexto ? 'Sin texto publicado' : '';
     setStatus('', '');
   }
 }
