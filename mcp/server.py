@@ -1,10 +1,6 @@
 """
 MCP Server para búsqueda de sentencias en BJN (Base de Jurisprudencia Nacional - Uruguay)
 Fuente: https://bjn-buscador.onrender.com/
-
-Soporta dos modos de transporte:
-- stdio  (local, para desarrollo)
-- HTTP   (remoto — se activa cuando existe la variable PORT)
 """
 
 import asyncio
@@ -20,7 +16,6 @@ MAX_POLLS = 30
 
 
 async def _esperar_job(client: httpx.AsyncClient, job_id: str) -> dict:
-    """Espera a que un job asíncrono del BJN finalice y devuelve el resultado."""
     for _ in range(MAX_POLLS):
         await asyncio.sleep(POLL_INTERVAL)
         resp = await client.get(f"{BASE_URL}/api/job/{job_id}")
@@ -28,7 +23,7 @@ async def _esperar_job(client: httpx.AsyncClient, job_id: str) -> dict:
         data = resp.json()
         if data.get("status") not in ("pending", "running"):
             return data
-    raise TimeoutError("El servidor BJN tardó demasiado en responder. Intentá de nuevo.")
+    raise TimeoutError("El servidor BJN tardó demasiado. Intentá de nuevo.")
 
 
 @mcp.tool()
@@ -42,93 +37,61 @@ async def buscar_sentencias(
     Busca sentencias judiciales en la Base de Jurisprudencia Nacional (BJN) de Uruguay.
 
     Args:
-        texto: Texto o términos a buscar (ej: "responsabilidad extracontractual", "daños y perjuicios").
-        tipo_busqueda: Cómo interpretar los términos. Opciones:
-            - "todas"     → todas las palabras deben aparecer (por defecto)
-            - "exacta"    → frase exacta
-            - "alguna"    → al menos una de las palabras
-            - "maximizar" → maximizar resultados
-        tipo_sentencia: Filtrar por tipo. Opciones:
-            - ""               → todas (por defecto)
-            - "DEFINITIVA"     → solo sentencias definitivas
-            - "INTERLOCUTORIA" → solo sentencias interlocutorias
-        orden: Criterio de ordenamiento. Opciones:
-            - "relevancia" → por relevancia (por defecto)
-            - "reciente"   → más recientes primero
-            - "antiguo"    → más antiguas primero
+        texto: Texto a buscar (ej: "responsabilidad extracontractual", "daños y perjuicios").
+        tipo_busqueda: "todas" | "exacta" | "alguna" | "maximizar"
+        tipo_sentencia: "" (todas) | "DEFINITIVA" | "INTERLOCUTORIA"
+        orden: "relevancia" | "reciente" | "antiguo"
 
     Returns:
-        Lista de sentencias encontradas con número, tipo, tribunal y extracto.
+        Lista de sentencias con número, tipo, tribunal y extracto.
     """
-    payload = {
-        "texto": texto,
-        "tipo": tipo_busqueda,
-        "sentencia": tipo_sentencia,
-        "orden": orden,
-    }
+    payload = {"texto": texto, "tipo": tipo_busqueda, "sentencia": tipo_sentencia, "orden": orden}
 
     async with httpx.AsyncClient(timeout=120) as client:
         resp = await client.post(f"{BASE_URL}/api/buscar", json=payload)
         resp.raise_for_status()
-        job_id = resp.json()["job_id"]
-        resultado = await _esperar_job(client, job_id)
+        resultado = await _esperar_job(client, resp.json()["job_id"])
 
     resultados = resultado.get("results", [])
-    total = resultado.get("total", 0)
-
     if not resultados:
         return f'No se encontraron sentencias para: "{texto}"'
 
-    lineas = [f'Se encontraron {total} sentencia(s) para: "{texto}"\n']
+    lineas = [f'Se encontraron {resultado.get("total", 0)} sentencia(s) para: "{texto}"\n']
     for r in resultados:
         lineas.append(
-            f"---\n"
-            f"**{r['numero']}** — {r['tipo']} | {r['tribunal']}\n"
-            f"Proceso: {r['proceso']}\n"
-            f"Extracto: {r['extracto']}\n"
+            f"---\n**{r['numero']}** — {r['tipo']} | {r['tribunal']}\n"
+            f"Proceso: {r['proceso']}\nExtracto: {r['extracto']}\n"
         )
-
-    lineas.append(
-        "\nPara ver el texto completo usá la herramienta `obtener_detalle_sentencia` "
-        "con el índice del resultado (0 = primera, 1 = segunda, etc.)."
-    )
+    lineas.append("\nUsá `obtener_detalle_sentencia` con el índice (0=primera, 1=segunda…) para el texto completo.")
     return "\n".join(lineas)
 
 
 @mcp.tool()
 async def obtener_detalle_sentencia(indice: int = 0) -> str:
     """
-    Obtiene el texto completo de una sentencia de los últimos resultados de búsqueda.
-
-    Debe haberse realizado previamente una búsqueda con `buscar_sentencias`.
-    El índice corresponde a la posición en la lista de resultados (0 = primera, 1 = segunda, etc.).
+    Obtiene el texto completo de una sentencia de la última búsqueda.
 
     Args:
-        indice: Posición de la sentencia en los últimos resultados (0 por defecto).
+        indice: Posición en los últimos resultados (0 = primera).
 
     Returns:
-        Texto completo de la sentencia, metadatos y enlace al BJN oficial.
+        Texto completo, metadatos y enlace al BJN oficial.
     """
     async with httpx.AsyncClient(timeout=120) as client:
         resp = await client.post(f"{BASE_URL}/api/detalle", json={"index": indice})
         resp.raise_for_status()
-        job_id = resp.json()["job_id"]
-        resultado = await _esperar_job(client, job_id)
+        resultado = await _esperar_job(client, resp.json()["job_id"])
 
-    titulo = resultado.get("titulo", "Sin título")
-    detalle = resultado.get("detalle", "Sin contenido")
-    url = resultado.get("popup_url", "")
-
-    partes = [f"# {titulo}\n", detalle]
-    if url:
+    partes = [f"# {resultado.get('titulo', 'Sin título')}\n", resultado.get("detalle", "")]
+    if url := resultado.get("popup_url"):
         partes.append(f"\nFuente oficial BJN: {url}")
-
     return "\n".join(partes)
 
 
 if __name__ == "__main__":
-    port = os.environ.get("PORT")
-    if port:
-        mcp.run(transport="sse", host="0.0.0.0", port=int(port))
+    port = int(os.environ.get("PORT", 8000))
+    if os.environ.get("PORT"):
+        import uvicorn
+        uvicorn.run(mcp.sse_app(), host="0.0.0.0", port=port)
     else:
         mcp.run(transport="stdio")
