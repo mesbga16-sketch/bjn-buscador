@@ -6,4 +6,9 @@ services:
     envVars:
       - key: PORT
         value: 10000
+      # Ruta fija del navegador Chromium dentro del contenedor Docker.
+      # Evita que Playwright lo busque en rutas temporales y garantiza
+      # que la capa de Docker se cachee correctamente entre deploys.
+      - key: PLAYWRIGHT_BROWSERS_PATH
+        value: /opt/playwright-browsers
     plan: free

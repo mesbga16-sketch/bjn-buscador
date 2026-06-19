@@ -1,7 +1,7 @@
-# Imagen base liviana: python:3.11-slim (~150MB) en lugar de la imagen oficial de Playwright (~1.5GB)
+# Imagen base liviana: python:3.11-slim (~150MB)
 FROM python:3.11-slim
 
-# Dependencias mínimas del sistema para que Chromium headless-shell funcione en Linux
+# Dependencias mínimas del sistema para Chromium headless en Linux
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libnss3 \
     libnspr4 \
@@ -26,10 +26,17 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 
-# Instalar dependencias Python y descargar solo el binario de Chromium headless-shell
+# Fijar la ruta del navegador para que Playwright no lo busque en otro lugar
+# y para que Docker pueda cachear la capa si la versión no cambia
+ENV PLAYWRIGHT_BROWSERS_PATH=/opt/playwright-browsers
+
+# Instalar dependencias Python
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt \
-    && playwright install chromium
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Instalar Chromium con todas sus dependencias del sistema en la ruta fija
+# --with-deps garantiza que no falten librerías en producción
+RUN playwright install --with-deps chromium
 
 # Copiar el código de la aplicación
 COPY . .

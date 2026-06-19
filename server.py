@@ -1,15 +1,15 @@
 """
 BJN Buscador - Servidor Flask + Playwright
-v11: fix do_detalle - usar ctx.expect_page() para capturar popup real del BJN.
+v12: hardening de scraping - timeouts explícitos, try/except granulares,
+     BeautifulSoup para extracción de texto, PLAYWRIGHT_BROWSERS_PATH fijo.
 - POST /api/buscar  -> devuelve {job_id} inmediatamente (no bloquea)
-- GET  /api/job/:id -> devuelve {status:'pending'|'done'|'error', result, error}
+- GET  /api/job/:id -> devuelve {status:'pending'|'done'|'error', ...}
 - POST /api/detalle -> idem
 - POST /api/pagina  -> idem
-Esto evita el timeout de 30s de Render en plan gratuito.
 """
 
 from flask import Flask, request, jsonify, send_from_directory
-import re, os, uuid, threading, queue
+import re, os, uuid, threading, queue, time
 from bs4 import BeautifulSoup
 
 app = Flask(__name__, static_folder='public')
@@ -18,8 +18,7 @@ PORT = int(os.environ.get('PORT', 3737))
 BJN_SIMPLE = 'https://bjn.poderjudicial.gub.uy/BJNPUBLICA/busquedaSimple.seam'
 
 # ─── Job store ────────────────────────────────────────────────────────────────
-# Diccionario {job_id: {'status': 'pending'|'done'|'error', 'result': ..., 'error': ...}}
-_jobs = {}
+_jobs      = {}
 _jobs_lock = threading.Lock()
 
 def _new_job():
@@ -38,15 +37,13 @@ def _finish_job(jid, result=None, error=None):
 # ─── Worker thread dedicado para Playwright ───────────────────────────────────
 _task_queue = queue.Queue()
 
-# Estado compartido (solo escrito/leido desde el worker thread)
 _state = {
     'page': None,
-    'last_url': None,
-    'ctx': None,
+    'ctx':  None,
 }
 
 def _playwright_worker():
-    from playwright.sync_api import sync_playwright
+    from playwright.sync_api import sync_playwright, TimeoutError as PWTimeout
 
     pw      = sync_playwright().start()
     browser = pw.chromium.launch(headless=True)
@@ -59,21 +56,19 @@ def _playwright_worker():
 
     EXTRACT_JS = """() => {
         const links = document.querySelectorAll('a[onclick*="lnkTituloSentencia"]');
-        if (links.length > 0) {
-            return Array.from(links).map((a, i) => {
-                const tr = a.closest('tr');
-                const extracto = tr ? tr.innerText.replace(a.innerText, '').trim() : '';
-                return { index: i, titulo: a.innerText.trim(),
-                         extracto: extracto.substring(0, 400) };
-            });
-        }
-        return [];
+        if (!links.length) return [];
+        return Array.from(links).map((a, i) => {
+            const tr      = a.closest('tr');
+            const extracto = tr ? tr.innerText.replace(a.innerText, '').trim() : '';
+            return { index: i, titulo: a.innerText.trim(),
+                     extracto: extracto.substring(0, 400) };
+        });
     }"""
 
     PAGINATION_JS = """() => {
-        const all = Array.from(document.querySelectorAll('a, input[type="submit"], input[type="button"]'));
-        const nextEl = all.find(el => /^(siguiente|>>|>)$/i.test((el.textContent || el.value || '').trim()));
-        const prevEl = all.find(el => /^(anterior|<<|<)$/i.test((el.textContent || el.value || '').trim()));
+        const all     = Array.from(document.querySelectorAll('a, input[type="submit"], input[type="button"]'));
+        const nextEl  = all.find(el => /^(siguiente|>>|>)$/i.test((el.textContent || el.value || '').trim()));
+        const prevEl  = all.find(el => /^(anterior|<<|<)$/i.test((el.textContent || el.value || '').trim()));
         const pageInfo = document.querySelector('.rf-ds-pg-cnt, [class*="pageCount"], [class*="pageInfo"]');
         return { hasNext: !!nextEl, hasPrev: !!prevEl,
                  pageText: pageInfo ? pageInfo.textContent.trim().replace(/\s+/g,' ') : '' };
@@ -88,11 +83,12 @@ def _playwright_worker():
         return false;
     }"""
 
-    # ── Funciones de busqueda ─────────────────────────────────────────────────
+    # ── Funciones de búsqueda ─────────────────────────────────────────────────
 
-    def wait_results():
+    def wait_results(timeout_ms=25000):
+        """Espera a que aparezcan links de resultados. No lanza excepción si no hay."""
         try:
-            page.wait_for_selector('a[onclick*="lnkTituloSentencia"]', timeout=25000)
+            page.wait_for_selector('a[onclick*="lnkTituloSentencia"]', timeout=timeout_ms)
         except Exception:
             pass
 
@@ -101,20 +97,35 @@ def _playwright_worker():
         tipo_busqueda = data.get('tipoBusqueda', 'TODAS_LAS_PALABRAS')
         ordenar       = data.get('ordenar', 'RELEVANCIA')
 
-        page.goto(BJN_SIMPLE, wait_until='domcontentloaded', timeout=35000)
+        # Navegar al buscador con timeout generoso para cold start
+        page.goto(BJN_SIMPLE, wait_until='domcontentloaded', timeout=40000)
         page.wait_for_selector('#formBusqueda\\:cajaQuery', timeout=15000)
+
         if texto:
             page.fill('#formBusqueda\\:cajaQuery', texto)
-        checked = page.eval_on_selector('#formBusqueda\\:chkMasOpciones', 'el => el.checked')
-        if not checked:
-            page.click('#formBusqueda\\:chkMasOpciones')
-            page.wait_for_timeout(500)
-        page.select_option('select[name="formBusqueda:j_id44:j_id48"]', tipo_busqueda)
-        page.select_option('select[name="formBusqueda:j_id52:j_id56"]', ordenar)
+
+        # Mostrar opciones avanzadas si están ocultas
+        try:
+            checked = page.eval_on_selector('#formBusqueda\\:chkMasOpciones', 'el => el.checked')
+            if not checked:
+                page.click('#formBusqueda\\:chkMasOpciones')
+                page.wait_for_timeout(500)
+        except Exception:
+            pass  # El checkbox puede no existir en todos los estados
+
+        try:
+            page.select_option('select[name="formBusqueda:j_id44:j_id48"]', tipo_busqueda)
+        except Exception:
+            pass
+
+        try:
+            page.select_option('select[name="formBusqueda:j_id52:j_id56"]', ordenar)
+        except Exception:
+            pass
+
         page.click('#formBusqueda\\:Search')
         wait_results()
 
-        _state['last_url'] = page.url
         raw        = page.evaluate(EXTRACT_JS)
         pagination = page.evaluate(PAGINATION_JS)
         return raw, pagination
@@ -123,59 +134,76 @@ def _playwright_worker():
         pats    = ['siguiente', '>>', '>'] if direction == 'next' else ['anterior', '<<', '<']
         clicked = page.evaluate(GO_PAGE_JS, pats)
         if not clicked:
-            raise ValueError('No hay mas paginas.')
+            raise ValueError('No hay más páginas.')
         page.wait_for_timeout(2500)
         wait_results()
-        _state['last_url'] = page.url
         raw        = page.evaluate(EXTRACT_JS)
         pagination = page.evaluate(PAGINATION_JS)
         return raw, pagination
 
     def do_detalle(index):
         """
-        Obtiene el texto completo de la sentencia en la posicion 'index'.
-        Estrategia: usar ctx.expect_page() para capturar el popup real que el BJN abre
-        via window.open en el oncomplete del AJAX. Esto es mas robusto que interceptar
-        window.open manualmente porque el popup se abre con el estado de sesion correcto.
+        Obtiene el texto completo de la sentencia en la posición 'index'.
+
+        Estrategia robusta:
+        1. ctx.expect_page() captura el popup real que el BJN abre via window.open
+           (más confiable que interceptar window.open manualmente).
+        2. popup_page.content() + BeautifulSoup extrae el texto del HTML directamente,
+           sin depender del rendering CSS (funciona en headless sin GPU).
+        3. Timeouts explícitos en cada paso con fallback graceful.
         """
         links = page.query_selector_all('a[onclick*="lnkTituloSentencia"]')
         if not links or index >= len(links):
             raise ValueError('Resultado no encontrado.')
+
         titulo = links[index].inner_text().strip()
 
-        # Capturar el popup real que el BJN abre via window.open
-        # El BJN hace AJAX primero y luego llama window.open en el oncomplete
-        # expect_page espera hasta que se abra una nueva pagina (timeout=20s)
+        # ── Paso 1: capturar el popup ─────────────────────────────────────────
         popup_page = None
         try:
-            with ctx.expect_page(timeout=20000) as popup_info:
+            with ctx.expect_page(timeout=22000) as popup_info:
                 links[index].click()
             popup_page = popup_info.value
-            popup_page.wait_for_load_state('domcontentloaded', timeout=15000)
-            # Esperar a que el AJAX de la pagina de detalle termine de cargar
-            try:
-                popup_page.wait_for_load_state('networkidle', timeout=8000)
-            except Exception:
-                pass  # networkidle puede no alcanzarse, continuar igual
-        except Exception as e_popup:
-            # Si no se abre popup, la sentencia no tiene texto publicado
-            if popup_page:
-                try:
-                    popup_page.close()
-                except Exception:
-                    pass
+        except PWTimeout:
             raise ValueError('Esta sentencia no tiene texto publicado en el BJN.')
+        except Exception as e:
+            raise ValueError(f'No se pudo abrir el detalle: {e}')
 
+        # ── Paso 2: esperar carga del popup ───────────────────────────────────
+        try:
+            popup_page.wait_for_load_state('domcontentloaded', timeout=15000)
+        except PWTimeout:
+            pass  # Continuar con lo que haya cargado
+        except Exception:
+            pass
+
+        try:
+            # networkidle asegura que el AJAX de RichFaces terminó
+            popup_page.wait_for_load_state('networkidle', timeout=8000)
+        except Exception:
+            pass  # No es crítico; continuar igual
+
+        # ── Paso 3: extraer HTML y cerrar popup ───────────────────────────────
         popup_url = popup_page.url
         try:
-            # Obtener el HTML y parsearlo con BeautifulSoup
-            # Esto es mas robusto que innerText/textContent en entornos headless sin GPU
             html = popup_page.content()
+        except Exception as e:
+            try:
+                popup_page.close()
+            except Exception:
+                pass
+            raise ValueError(f'No se pudo leer el contenido del popup: {e}')
         finally:
-            popup_page.close()
+            try:
+                popup_page.close()
+            except Exception:
+                pass
 
+        # ── Paso 4: parsear con BeautifulSoup ────────────────────────────────
+        # BeautifulSoup extrae el texto del HTML sin depender del rendering CSS.
+        # Esto es necesario en entornos headless sin GPU donde innerText puede
+        # devolver '' aunque el HTML tenga contenido.
         soup = BeautifulSoup(html, 'html.parser')
-        # Eliminar scripts y styles para limpiar el texto
         for tag in soup(['script', 'style', 'head']):
             tag.decompose()
         detalle_text = soup.get_text(separator='\n', strip=True)
@@ -218,7 +246,7 @@ def _playwright_worker():
 # ─── Helpers de resultados ────────────────────────────────────────────────────
 
 def parse_title(titulo: str) -> dict:
-    m = re.match(r'^(\d+/\d+)\s+(\w+)\s+-\s+(.+?)\s+-\s+(.+)$', titulo)
+    m = re.match(r'^(\d[\d.]*\/\d+)\s+(\w+)\s+-\s+(.+?)\s+-\s+(.+)$', titulo)
     if m:
         return {'numero': m.group(1), 'tipo': m.group(2),
                 'tribunal': m.group(3).strip(), 'proceso': m.group(4).strip()}
@@ -243,11 +271,9 @@ def get_job(jid):
     if job['status'] == 'pending':
         return jsonify({'status': 'pending'})
     if job['status'] == 'error':
-        # Limpiar el job despues de leerlo
         with _jobs_lock:
             _jobs.pop(jid, None)
         return jsonify({'status': 'error', 'error': job['error']}), 500
-    # done
     result = job['result']
     with _jobs_lock:
         _jobs.pop(jid, None)
@@ -283,11 +309,8 @@ def detalle():
 
 @app.route('/api/status', methods=['GET'])
 def status():
-    # Status es sincrono y rapido (no necesita job)
     jid = _new_job()
     _task_queue.put({'type': 'status', 'jid': jid})
-    # Esperar max 3s
-    import time
     for _ in range(15):
         time.sleep(0.2)
         with _jobs_lock:
@@ -306,55 +329,6 @@ def status():
 _worker_thread = threading.Thread(
     target=_playwright_worker, daemon=True, name='playwright-worker')
 _worker_thread.start()
-
-
-@app.route('/api/debug/popup', methods=['POST'])
-def api_debug_popup():
-    """Endpoint de debug: devuelve el HTML completo del popup para un resultado."""
-    data = request.get_json(force=True)
-    index = int(data.get('index', 0))
-    job_id = str(uuid.uuid4())
-    jobs[job_id] = {'status': 'pending'}
-    def run():
-        try:
-            with worker_lock:
-                links = page.query_selector_all('a[onclick*="lnkTituloSentencia"]')
-                if not links or index >= len(links):
-                    jobs[job_id] = {'status': 'error', 'error': 'No links'}
-                    return
-                popup_page = None
-                try:
-                    with ctx.expect_page(timeout=20000) as popup_info:
-                        links[index].click()
-                    popup_page = popup_info.value
-                    popup_page.wait_for_load_state('domcontentloaded', timeout=15000)
-                    try:
-                        popup_page.wait_for_load_state('networkidle', timeout=8000)
-                    except Exception:
-                        pass
-                    url = popup_page.url
-                    html = popup_page.content()
-                    inner = popup_page.evaluate('() => document.body.innerText')
-                    textc = popup_page.evaluate('() => document.body.textContent')
-                    popup_page.close()
-                    jobs[job_id] = {
-                        'status': 'done',
-                        'url': url,
-                        'html_len': len(html),
-                        'inner_len': len(inner),
-                        'textc_len': len(textc),
-                        'inner_preview': inner[:500],
-                        'html_preview': html[:1000]
-                    }
-                except Exception as e:
-                    if popup_page:
-                        try: popup_page.close()
-                        except: pass
-                    jobs[job_id] = {'status': 'error', 'error': str(e)}
-        except Exception as e:
-            jobs[job_id] = {'status': 'error', 'error': str(e)}
-    threading.Thread(target=run, daemon=True).start()
-    return jsonify({'job_id': job_id})
 
 if __name__ == '__main__':
     print(f'\nBJN Buscador en http://localhost:{PORT}\n')
