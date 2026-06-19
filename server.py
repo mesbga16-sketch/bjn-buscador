@@ -225,6 +225,13 @@ def _playwright_worker():
         tipo_busqueda = data.get('tipoBusqueda', 'TODAS_LAS_PALABRAS')
         ordenar       = data.get('ordenar', 'RELEVANCIA')
 
+        # Cerrar todas las sesiones viejas antes de crear una nueva
+        # para evitar acumulacion de contextos en memoria
+        with _sessions_lock:
+            sids_to_close = list(_sessions.keys())
+        for old_sid in sids_to_close:
+            _close_session(old_sid)
+
         page = new_ctx_page()
         fill_simple(page, texto, tipo_busqueda, ordenar)
         wait_results(page)
@@ -273,41 +280,61 @@ def _playwright_worker():
         else:
             raise ValueError('Resultado no encontrado.')
 
-        # Inyectar interceptor de window.open
-        page.evaluate("""
-            () => {
-                window._capturedPopupUrl = null;
-                window.open = function(url, name, features) {
-                    window._capturedPopupUrl = url;
-                    return { focus: () => {}, closed: false };
-                };
-            }
-        """)
+        # Usar una pagina separada para interceptar window.open
+        # para no contaminar la pagina de resultados con el override de window.open
+        detalle_page = new_ctx_page()
+        try:
+            # Copiar cookies de la sesion actual a la pagina de detalle
+            cookies = page.context.cookies()
+            detalle_page.context.add_cookies(cookies)
 
-        # Hacer clic y esperar que el AJAX termine
-        elemento.click()
-        page.wait_for_timeout(3000)
-        popup_url = page.evaluate('() => window._capturedPopupUrl')
+            # Navegar a la misma URL de resultados en la pagina de detalle
+            detalle_page.goto(page.url, wait_until='domcontentloaded', timeout=20000)
+            wait_results(detalle_page)
 
-        if not popup_url:
-            # Fallback: intentar capturar popup real
-            raise ValueError('No se pudo obtener la URL de la sentencia. Intente nuevamente.')
+            # Obtener el elemento en la pagina de detalle
+            det_links  = detalle_page.query_selector_all('a[onclick*="lnkTituloSentencia"]')
+            det_celdas = detalle_page.query_selector_all('td[id*="dataTable:"][id*=":colFec"]')
 
-        # Construir URL completa si es relativa
-        if popup_url.startswith('/'):
-            popup_url = f'https://bjn.poderjudicial.gub.uy{popup_url}'
+            if det_links and index < len(det_links):
+                det_elemento = det_links[index]
+            elif det_celdas and index < len(det_celdas):
+                det_elemento = det_celdas[index]
+            else:
+                raise ValueError('Resultado no encontrado en la pagina de detalle.')
 
-        # Navegar a la URL del popup con las cookies de la sesion actual
-        popup_page = new_ctx_page()
-        cookies = page.context.cookies()
-        popup_page.context.add_cookies(cookies)
-        popup_page.goto(popup_url, wait_until='domcontentloaded', timeout=20000)
-        detalle_text = popup_page.evaluate(
-            "() => { const box = document.getElementById('textoSentenciaBox');"
-            "  if (box) return box.innerText.trim(); return document.body.innerText.trim(); }"
-        )
-        popup_page.context.close()
-        return {'titulo': titulo, 'detalle': detalle_text, 'popup_url': popup_url, 'sid': sid}
+            # Inyectar interceptor de window.open en la pagina de detalle (no en la de resultados)
+            detalle_page.evaluate("""
+                () => {
+                    window._capturedPopupUrl = null;
+                    window.open = function(url, name, features) {
+                        window._capturedPopupUrl = url;
+                        return { focus: () => {}, closed: false };
+                    };
+                }
+            """)
+
+            det_elemento.click()
+            detalle_page.wait_for_timeout(3000)
+            popup_url = detalle_page.evaluate('() => window._capturedPopupUrl')
+
+            if not popup_url:
+                raise ValueError('No se pudo obtener la URL de la sentencia. Intente nuevamente.')
+
+            if popup_url.startswith('/'):
+                popup_url = f'https://bjn.poderjudicial.gub.uy{popup_url}'
+
+            # Navegar a la URL del popup en la misma pagina de detalle
+            detalle_page.goto(popup_url, wait_until='domcontentloaded', timeout=20000)
+            detalle_text = detalle_page.evaluate(
+                "() => { const box = document.getElementById('textoSentenciaBox');"
+                "  if (box) return box.innerText.trim(); return document.body.innerText.trim(); }"
+            )
+            return {'titulo': titulo, 'detalle': detalle_text, 'popup_url': popup_url, 'sid': sid}
+        finally:
+            # Siempre cerrar la pagina de detalle para liberar memoria
+            try: detalle_page.context.close()
+            except: pass
 
     # Loop principal del worker
     while True:
