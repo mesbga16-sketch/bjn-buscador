@@ -669,6 +669,7 @@ function loadFromParams() {
 function compartirBusqueda() {
   if (!ultimaBusqueda) return;
   const params = payloadToParams(ultimaBusqueda);
+  // Construir la URL de compartir sin modificar la URL actual de la página
   const url    = `${window.location.origin}${window.location.pathname}?${params.toString()}`;
   navigator.clipboard.writeText(url)
     .then(() => showToast('Enlace copiado al portapapeles'))
@@ -686,10 +687,6 @@ async function buscar() {
     return;
   }
   ultimaBusqueda = payload;
-
-  // Actualizar URL sin recargar la página
-  const params = payloadToParams(payload);
-  history.replaceState(null, '', `?${params.toString()}`);
 
   setStatus('Consultando el BJN...', 'loading');
   document.getElementById('results-area').style.display = 'none';
@@ -732,6 +729,8 @@ async function buscar() {
       sessionId = data.sid || null;
       histAdd(payload);
       setStatus('', '');
+      // Limpiar la URL para que al refrescar no se vuelva a buscar
+      history.replaceState(null, '', window.location.pathname);
       renderResults(data);
       return;
     } catch (e) {
