@@ -129,6 +129,6 @@ async def obtener_detalle_sentencia(indice: int = 0) -> str:
 if __name__ == "__main__":
     port = os.environ.get("PORT")
     if port:
-        mcp.run(transport="streamable-http", host="0.0.0.0", port=int(port))
+        mcp.run(transport="sse", host="0.0.0.0", port=int(port))
     else:
         mcp.run(transport="stdio")
