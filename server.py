@@ -112,40 +112,19 @@ def _playwright_worker():
     def do_detalle(index):
         """
         Obtiene el texto completo de la sentencia en la posicion 'index'.
-        Estrategia: interceptar window.open en una pagina NUEVA (contexto separado)
-        que carga la misma URL de resultados, para no contaminar la pagina principal.
+        Estrategia: interceptar window.open en la pagina principal, hacer clic,
+        capturar la URL del popup, navegar a ella y luego volver a los resultados.
         """
-        # Obtener titulo del elemento en la pagina principal
         links = page.query_selector_all('a[onclick*="lnkTituloSentencia"]')
         if not links or index >= len(links):
             raise ValueError('Resultado no encontrado.')
         titulo = links[index].inner_text().strip()
+        results_url = _state.get('last_url') or BJN_SIMPLE
 
-        # Crear contexto temporal para el detalle
-        det_ctx  = browser.new_context(locale='es-UY')
-        det_page = det_ctx.new_page()
         try:
-            # Copiar cookies de sesion al contexto temporal
-            cookies = ctx.cookies()
-            det_ctx.add_cookies(cookies)
-
-            # Cargar la pagina de resultados en el contexto temporal
-            results_url = _state.get('last_url') or BJN_SIMPLE
-            det_page.goto(results_url, wait_until='domcontentloaded', timeout=25000)
-            try:
-                det_page.wait_for_selector('a[onclick*="lnkTituloSentencia"]', timeout=15000)
-            except Exception:
-                pass
-
-            # Verificar que el elemento existe en la pagina temporal
-            det_links = det_page.query_selector_all('a[onclick*="lnkTituloSentencia"]')
-            if not det_links or index >= len(det_links):
-                raise ValueError('Resultado no encontrado en pagina de detalle.')
-
             # Interceptar window.open ANTES del clic
-            det_page.evaluate("""() => {
+            page.evaluate("""() => {
                 window._capturedPopupUrl = null;
-                const _orig = window.open;
                 window.open = function(url, name, features) {
                     window._capturedPopupUrl = url;
                     return { focus: () => {}, closed: false };
@@ -153,9 +132,9 @@ def _playwright_worker():
             }""")
 
             # Hacer clic y esperar el AJAX
-            det_links[index].click()
-            det_page.wait_for_timeout(4000)
-            popup_url = det_page.evaluate('() => window._capturedPopupUrl')
+            links[index].click()
+            page.wait_for_timeout(4000)
+            popup_url = page.evaluate('() => window._capturedPopupUrl')
 
             if not popup_url:
                 raise ValueError('No se pudo obtener la URL de la sentencia. Intentá de nuevo.')
@@ -163,17 +142,22 @@ def _playwright_worker():
             if popup_url.startswith('/'):
                 popup_url = f'https://bjn.poderjudicial.gub.uy{popup_url}'
 
-            # Navegar a la URL de la sentencia
-            det_page.goto(popup_url, wait_until='domcontentloaded', timeout=20000)
-            detalle_text = det_page.evaluate("""() => {
+            # Navegar a la URL de la sentencia en la pagina principal
+            page.goto(popup_url, wait_until='domcontentloaded', timeout=20000)
+            detalle_text = page.evaluate("""() => {
                 const box = document.getElementById('textoSentenciaBox');
                 if (box) return box.innerText.trim();
                 return document.body.innerText.trim();
             }""")
+
             return {'titulo': titulo, 'detalle': detalle_text, 'popup_url': popup_url}
         finally:
-            try: det_ctx.close()
-            except: pass
+            # Volver a la pagina de resultados para que la proxima busqueda funcione
+            try:
+                page.goto(results_url, wait_until='domcontentloaded', timeout=20000)
+                page.wait_for_selector('a[onclick*="lnkTituloSentencia"]', timeout=10000)
+            except Exception:
+                pass
 
     # ── Loop principal del worker ─────────────────────────────────────────────
 
