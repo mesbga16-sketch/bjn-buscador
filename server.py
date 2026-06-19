@@ -10,6 +10,7 @@ Esto evita el timeout de 30s de Render en plan gratuito.
 
 from flask import Flask, request, jsonify, send_from_directory
 import re, os, uuid, threading, queue
+from bs4 import BeautifulSoup
 
 app = Flask(__name__, static_folder='public')
 PORT = int(os.environ.get('PORT', 3737))
@@ -167,19 +168,17 @@ def _playwright_worker():
 
         popup_url = popup_page.url
         try:
-            detalle_text = popup_page.evaluate("""() => {
-                const box = document.getElementById('textoSentenciaBox');
-                if (box) {
-                    const t = box.innerText.trim() || box.textContent.trim();
-                    return t;
-                }
-                // Fallback: usar textContent (funciona aunque el elemento este oculto)
-                const inner = document.body.innerText.trim();
-                if (inner) return inner;
-                return document.body.textContent.trim();
-            }""")
+            # Obtener el HTML y parsearlo con BeautifulSoup
+            # Esto es mas robusto que innerText/textContent en entornos headless sin GPU
+            html = popup_page.content()
         finally:
             popup_page.close()
+
+        soup = BeautifulSoup(html, 'html.parser')
+        # Eliminar scripts y styles para limpiar el texto
+        for tag in soup(['script', 'style', 'head']):
+            tag.decompose()
+        detalle_text = soup.get_text(separator='\n', strip=True)
 
         return {'titulo': titulo, 'detalle': detalle_text, 'popup_url': popup_url}
 
