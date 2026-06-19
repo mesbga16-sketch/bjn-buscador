@@ -183,7 +183,7 @@
 
   .result-proceso { font-size: 12px; color: var(--extracto); margin-bottom: 5px; }
   .result-extracto { font-size: 13px; color: var(--extracto); line-height: 1.55; }
-  .result-extracto mark { background: #fef9c3; padding: 0 1px; border-radius: 2px; }
+  .result-extracto mark { background: #fde047; padding: 0 2px; border-radius: 2px; font-weight: 600; color: #1a1a1a; }
 
   /* Paginacion */
   .pagination {
@@ -240,7 +240,7 @@
     overflow-y: auto;
     font-family: 'Georgia', serif;
   }
-  .detail-body mark { background: #fef9c3; padding: 0 2px; border-radius: 2px; }
+  .detail-body mark { background: #fde047; padding: 0 3px; border-radius: 3px; font-weight: 600; color: #1a1a1a; box-shadow: 0 0 0 1px #f59e0b40; }
 
   .detail-actions {
     display: flex;
@@ -794,17 +794,56 @@ function renderPagination(pagination) {
 
 // ─── Resaltado de términos ─────────────────────────────────────────────────
 
+// Normaliza texto para comparación ignorando acentos
+function normalizarTexto(str) {
+  return str.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+}
+
 function highlight(text, query) {
   if (!query || !text) return escapeHtml(text || '');
-  // Escapar HTML primero
-  let result = escapeHtml(text);
-  // Resaltar cada palabra de más de 2 caracteres
-  const words = query.trim().split(/\s+/).filter(w => w.length > 2);
-  words.forEach(w => {
-    const escaped = w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const re = new RegExp(`(${escaped})`, 'gi');
-    result = result.replace(re, '<mark>$1</mark>');
+
+  const words = query.trim().split(/\s+/).filter(w => w.length > 1);
+  if (!words.length) return escapeHtml(text);
+
+  // Construir regex que ignore acentos usando la versión normalizada
+  // Primero escapar HTML del texto original
+  const escaped = escapeHtml(text);
+
+  // Construir patrón que matchee cada palabra con o sin acento
+  const patterns = words.map(w => {
+    // Escapar caracteres especiales de regex
+    const clean = w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    // Reemplazar vocales para aceptar versión con/sin acento
+    return clean
+      .replace(/[aá]/gi, '[aá]')
+      .replace(/[eé]/gi, '[eé]')
+      .replace(/[ií]/gi, '[ií]')
+      .replace(/[oó]/gi, '[oó]')
+      .replace(/[uú]/gi, '[uú]')
+      .replace(/[nñ]/gi, '[nñ]');
   });
+
+  // Primero intentar resaltar la frase completa
+  let result = escaped;
+  if (words.length > 1) {
+    const frasePattern = patterns.join('\\s+');
+    try {
+      const reFrase = new RegExp(`(${frasePattern})`, 'gi');
+      result = result.replace(reFrase, '<mark>$1</mark>');
+    } catch(e) {}
+  }
+
+  // Luego resaltar palabras individuales (solo las que no están ya dentro de <mark>)
+  patterns.forEach(pat => {
+    try {
+      const re = new RegExp(`(?<!<[^>]*)(${pat})(?![^<]*>)`, 'gi');
+      result = result.replace(re, (m, p1) => {
+        // No re-marcar lo que ya está marcado
+        return `<mark>${p1}</mark>`;
+      });
+    } catch(e) {}
+  });
+
   return result;
 }
 

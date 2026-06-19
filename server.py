@@ -112,52 +112,52 @@ def _playwright_worker():
     def do_detalle(index):
         """
         Obtiene el texto completo de la sentencia en la posicion 'index'.
-        Estrategia: interceptar window.open en la pagina principal, hacer clic,
-        capturar la URL del popup, navegar a ella y luego volver a los resultados.
+        Estrategia optimizada: interceptar window.open, capturar URL con polling rapido,
+        abrir la sentencia en una pagina nueva (sin tocar la pagina de resultados).
         """
         links = page.query_selector_all('a[onclick*="lnkTituloSentencia"]')
         if not links or index >= len(links):
             raise ValueError('Resultado no encontrado.')
         titulo = links[index].inner_text().strip()
-        results_url = _state.get('last_url') or BJN_SIMPLE
 
-        try:
-            # Interceptar window.open ANTES del clic
-            page.evaluate("""() => {
-                window._capturedPopupUrl = null;
-                window.open = function(url, name, features) {
-                    window._capturedPopupUrl = url;
-                    return { focus: () => {}, closed: false };
-                };
-            }""")
+        # Interceptar window.open ANTES del clic
+        page.evaluate("""() => {
+            window._capturedPopupUrl = null;
+            window.open = function(url, name, features) {
+                window._capturedPopupUrl = url;
+                return { focus: () => {}, closed: false };
+            };
+        }""")
 
-            # Hacer clic y esperar el AJAX
-            links[index].click()
-            page.wait_for_timeout(4000)
+        # Hacer clic y esperar la URL con polling rapido (max 6s)
+        links[index].click()
+        popup_url = None
+        for _ in range(30):  # 30 x 200ms = 6s max
+            page.wait_for_timeout(200)
             popup_url = page.evaluate('() => window._capturedPopupUrl')
+            if popup_url:
+                break
 
-            if not popup_url:
-                raise ValueError('No se pudo obtener la URL de la sentencia. Intentá de nuevo.')
+        if not popup_url:
+            raise ValueError('No se pudo obtener la URL de la sentencia. Intentá de nuevo.')
 
-            if popup_url.startswith('/'):
-                popup_url = f'https://bjn.poderjudicial.gub.uy{popup_url}'
+        if popup_url.startswith('/'):
+            popup_url = f'https://bjn.poderjudicial.gub.uy{popup_url}'
 
-            # Navegar a la URL de la sentencia en la pagina principal
-            page.goto(popup_url, wait_until='domcontentloaded', timeout=20000)
-            detalle_text = page.evaluate("""() => {
+        # Abrir la sentencia en una pagina nueva del mismo contexto
+        # (la pagina de resultados queda intacta para la proxima operacion)
+        sentencia_page = ctx.new_page()
+        try:
+            sentencia_page.goto(popup_url, wait_until='domcontentloaded', timeout=20000)
+            detalle_text = sentencia_page.evaluate("""() => {
                 const box = document.getElementById('textoSentenciaBox');
                 if (box) return box.innerText.trim();
                 return document.body.innerText.trim();
             }""")
-
-            return {'titulo': titulo, 'detalle': detalle_text, 'popup_url': popup_url}
         finally:
-            # Volver a la pagina de resultados para que la proxima busqueda funcione
-            try:
-                page.goto(results_url, wait_until='domcontentloaded', timeout=20000)
-                page.wait_for_selector('a[onclick*="lnkTituloSentencia"]', timeout=10000)
-            except Exception:
-                pass
+            sentencia_page.close()
+
+        return {'titulo': titulo, 'detalle': detalle_text, 'popup_url': popup_url}
 
     # ── Loop principal del worker ─────────────────────────────────────────────
 
