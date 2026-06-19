@@ -12,3 +12,13 @@ services:
       - key: PLAYWRIGHT_BROWSERS_PATH
         value: /opt/playwright-browsers
     plan: free
+
+  - type: web
+    name: bjn-jurisprudencia-mcp
+    runtime: python
+    buildCommand: pip install -r mcp/requirements.txt
+    startCommand: python mcp/server.py
+    plan: free
+    envVars:
+      - key: PORT
+        value: 10000
