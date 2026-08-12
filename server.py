@@ -324,6 +324,10 @@ def verificar_impo(cita: dict) -> dict:
 def index():
     return send_from_directory('public', 'index.html')
 
+@app.route('/verificador')
+def verificador_page():
+    return send_from_directory('public', 'verificador.html')
+
 @app.route('/api/job/<jid>', methods=['GET'])
 def get_job(jid):
     with _jobs_lock:

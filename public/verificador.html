@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Uruguay No Alucina — Verificador de citas legales</title>
+<style>
+  :root {
+    --tinta: #0f2e1f;
+    --verde: #0f5c3a;
+    --verde-claro: #14804f;
+    --gris: #f4f6f5;
+    --borde: #d3ddd8;
+    --texto: #1c2733;
+    --rojo: #c0392b;
+    --rojo-bg: #fee2e2;
+    --verde-ok-bg: #dcfce7;
+    --ambar: #92400e;
+    --ambar-bg: #fef3c7;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Segoe UI', Arial, sans-serif;
+    font-size: 14px;
+    color: var(--texto);
+    background: var(--gris);
+    min-height: 100vh;
+  }
+
+  header {
+    background: var(--tinta);
+    color: white;
+    padding: 16px 24px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+  header .marca { display: flex; align-items: baseline; gap: 8px; }
+  header h1 { font-size: 18px; font-weight: 700; letter-spacing: 0.2px; }
+  header .subtitulo { font-size: 12px; color: rgba(255,255,255,0.65); }
+  header nav { margin-left: auto; }
+  header nav a {
+    font-size: 12px;
+    color: rgba(255,255,255,0.75);
+    text-decoration: none;
+    border-bottom: 1px dotted rgba(255,255,255,0.4);
+  }
+  header nav a:hover { color: white; }
+
+  .container { max-width: 900px; margin: 0 auto; padding: 28px 16px 60px; }
+
+  .hero { margin-bottom: 22px; }
+  .hero h2 { font-size: 22px; color: var(--tinta); margin-bottom: 8px; }
+  .hero p { color: #445048; line-height: 1.55; max-width: 700px; }
+
+  .fuentes { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+  .fuente-chip {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--verde-claro);
+    background: white;
+    border: 1px solid var(--borde);
+    border-radius: 20px;
+    padding: 4px 12px;
+  }
+
+  .panel {
+    background: white;
+    border: 1px solid var(--borde);
+    border-radius: 8px;
+    padding: 20px;
+  }
+
+  label {
+    display: block;
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--tinta);
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    margin-bottom: 6px;
+  }
+
+  textarea {
+    width: 100%;
+    min-height: 220px;
+    resize: vertical;
+    border: 1px solid var(--borde);
+    border-radius: 5px;
+    padding: 12px 14px;
+    font-size: 14px;
+    font-family: inherit;
+    color: var(--texto);
+  }
+  textarea:focus {
+    outline: none;
+    border-color: var(--verde-claro);
+    box-shadow: 0 0 0 2px rgba(20,128,79,0.15);
+  }
+
+  .acciones { display: flex; align-items: center; gap: 12px; margin-top: 14px; }
+  .btn {
+    padding: 10px 26px;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 700;
+    background: var(--verde-claro);
+    color: white;
+    transition: opacity 0.15s;
+  }
+  .btn:hover:not(:disabled) { opacity: 0.88; }
+  .btn:disabled { opacity: 0.6; cursor: default; }
+
+  .status { font-size: 13px; color: #445048; display: none; align-items: center; gap: 8px; }
+  .status.visible { display: flex; }
+  .status.error { color: var(--rojo); }
+
+  .spinner {
+    width: 13px; height: 13px;
+    border: 2px solid rgba(20,128,79,0.25);
+    border-top-color: var(--verde-claro);
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+  }
+  .status.error .spinner { display: none; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .resumen {
+    display: flex;
+    gap: 10px;
+    margin: 22px 0 14px;
+    flex-wrap: wrap;
+  }
+  .resumen-item {
+    flex: 1;
+    min-width: 130px;
+    background: white;
+    border: 1px solid var(--borde);
+    border-radius: 8px;
+    padding: 12px 16px;
+    text-align: center;
+  }
+  .resumen-item .n { font-size: 22px; font-weight: 700; }
+  .resumen-item .l { font-size: 11px; color: #667; text-transform: uppercase; letter-spacing: 0.3px; }
+  .resumen-item.ok .n { color: var(--verde); }
+  .resumen-item.no .n { color: var(--rojo); }
+  .resumen-item.dud .n { color: var(--ambar); }
+
+  .citas-table { width: 100%; border-collapse: collapse; font-size: 13px; background: white;
+                 border: 1px solid var(--borde); border-radius: 8px; overflow: hidden; }
+  .citas-table th {
+    text-align: left;
+    padding: 10px 12px;
+    background: var(--gris);
+    color: var(--tinta);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    border-bottom: 2px solid var(--borde);
+  }
+  .citas-table td { padding: 12px; border-bottom: 1px solid var(--borde); vertical-align: top; }
+  .citas-table tr:last-child td { border-bottom: none; }
+  .citas-table a { color: var(--verde-claro); }
+
+  .estado-badge {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 10px;
+    font-size: 11px;
+    font-weight: 700;
+    white-space: nowrap;
+  }
+  .estado-verificada    { background: var(--verde-ok-bg); color: var(--verde); }
+  .estado-no_encontrada { background: var(--rojo-bg); color: var(--rojo); }
+  .estado-no_verificable{ background: var(--ambar-bg); color: var(--ambar); }
+
+  .vacio { text-align: center; padding: 30px 10px; color: #667; font-size: 13px; }
+
+  footer {
+    max-width: 900px;
+    margin: 30px auto 0;
+    padding: 0 16px 30px;
+    font-size: 12px;
+    color: #667;
+    line-height: 1.6;
+  }
+  footer strong { color: var(--tinta); }
+
+  @media (max-width: 640px) {
+    header { flex-wrap: wrap; }
+    header nav { margin-left: 0; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="marca">
+    <h1>🇺🇾 Uruguay No Alucina</h1>
+    <span class="subtitulo">verificador de citas legales</span>
+  </div>
+  <nav>
+    <a href="/">Buscar jurisprudencia (BJN) →</a>
+  </nav>
+</header>
+
+<div class="container">
+
+  <div class="hero">
+    <h2>¿La cita existe, o la inventó la IA?</h2>
+    <p>
+      Pegá un escrito, dictamen o resolución. Se detectan las citas a leyes, decretos y
+      jurisprudencia uruguaya que contiene, y cada una se verifica contra la fuente oficial
+      correspondiente — no contra lo que diga un modelo de lenguaje.
+    </p>
+    <div class="fuentes">
+      <span class="fuente-chip">BJN — Poder Judicial</span>
+      <span class="fuente-chip">IMPO — Leyes y Decretos</span>
+    </div>
+  </div>
+
+  <div class="panel">
+    <label for="texto">Texto a verificar</label>
+    <textarea id="texto" placeholder="Pegá acá el texto. Ejemplos de citas que se detectan: &#10;&#8226; Ley N.º 19.355&#10;&#8226; Decreto N.º 152/013&#10;&#8226; Decreto-Ley 14.500&#10;&#8226; Sentencia N.º 123/2020"></textarea>
+    <div class="acciones">
+      <button class="btn" id="btn-verificar" onclick="verificar()">Verificar citas</button>
+      <div class="status" id="status"><span class="spinner"></span><span id="status-msg"></span></div>
+    </div>
+  </div>
+
+  <div id="resumen-wrap" style="display:none;">
+    <div class="resumen">
+      <div class="resumen-item ok"><div class="n" id="n-verificadas">0</div><div class="l">Verificadas</div></div>
+      <div class="resumen-item no"><div class="n" id="n-no-encontradas">0</div><div class="l">No encontradas</div></div>
+      <div class="resumen-item dud"><div class="n" id="n-no-verificables">0</div><div class="l">No se pudo verificar</div></div>
+    </div>
+
+    <table class="citas-table" id="tabla-citas">
+      <thead>
+        <tr><th>Cita</th><th>Tipo</th><th>Fuente</th><th>Estado</th><th>Detalle</th></tr>
+      </thead>
+      <tbody id="tbody-citas"></tbody>
+    </table>
+    <div class="vacio" id="vacio" style="display:none;">
+      No se encontraron citas legales reconocibles en el texto.
+    </div>
+  </div>
+
+</div>
+
+<footer>
+  <strong>Cómo funciona:</strong> las leyes y decretos se verifican contra el Registro Nacional de
+  Leyes y Decretos de IMPO; la jurisprudencia se busca en tiempo real en la Base de Jurisprudencia
+  Nacional (BJN) del Poder Judicial. Un resultado <strong>"no se pudo verificar"</strong> significa que
+  la fuente oficial no respondió o que faltó un dato (ej. el año de la norma) — nunca se informa
+  "no encontrada" por una falla técnica. Esta herramienta ayuda a detectar citas alucinadas por IA,
+  pero no reemplaza la verificación profesional antes de presentar un escrito.
+</footer>
+
+<script>
+function escapeHtml(str) {
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+const ESTADO_LABEL = {
+  verificada:     'Verificada',
+  no_encontrada:  'No encontrada',
+  no_verificable: 'No se pudo verificar',
+};
+
+async function pollJob(jobId, { onProgress, maxWaitMs = 120000, intervalMs = 2000 } = {}) {
+  const deadline = Date.now() + maxWaitMs;
+  let elapsed = 0;
+  while (Date.now() < deadline) {
+    await new Promise(res => setTimeout(res, intervalMs));
+    elapsed += intervalMs;
+    if (onProgress) onProgress(elapsed);
+    const r    = await fetch(`/api/job/${jobId}`);
+    const data = await r.json();
+    if (data.status === 'pending') continue;
+    if (data.status === 'error') throw new Error(data.error || 'Error desconocido');
+    if (data.status === 'done') return data;
+    throw new Error('Estado desconocido: ' + data.status);
+  }
+  throw new Error('La verificación tardó demasiado. Intentá de nuevo.');
+}
+
+function setStatus(msg, tipo) {
+  const el = document.getElementById('status');
+  const msgEl = document.getElementById('status-msg');
+  if (!tipo) { el.classList.remove('visible', 'error'); return; }
+  el.classList.add('visible');
+  el.classList.toggle('error', tipo === 'error');
+  msgEl.textContent = msg;
+}
+
+function renderResumen(citas) {
+  const contar = estado => citas.filter(c => c.estado === estado).length;
+  document.getElementById('n-verificadas').textContent     = contar('verificada');
+  document.getElementById('n-no-encontradas').textContent  = contar('no_encontrada');
+  document.getElementById('n-no-verificables').textContent = contar('no_verificable');
+}
+
+function renderCitas(citas) {
+  const tbody   = document.getElementById('tbody-citas');
+  const wrap    = document.getElementById('resumen-wrap');
+  const resumen = document.querySelector('.resumen');
+  const tabla   = document.getElementById('tabla-citas');
+  const vacio   = document.getElementById('vacio');
+
+  wrap.style.display = 'block';
+
+  if (!citas.length) {
+    resumen.style.display = 'none';
+    tabla.style.display   = 'none';
+    vacio.style.display   = 'block';
+    return;
+  }
+
+  resumen.style.display = 'flex';
+  tabla.style.display   = 'table';
+  vacio.style.display   = 'none';
+
+  renderResumen(citas);
+  tbody.innerHTML = citas.map(c => `
+    <tr>
+      <td>${escapeHtml(c.cita)}</td>
+      <td>${escapeHtml(c.tipo)}</td>
+      <td>${escapeHtml(c.fuente)}</td>
+      <td><span class="estado-badge estado-${c.estado}">${ESTADO_LABEL[c.estado] || c.estado}</span></td>
+      <td>${c.url
+          ? `<a href="${escapeHtml(c.url)}" target="_blank" rel="noopener">${escapeHtml(c.detalle || 'Ver fuente')}</a>`
+          : escapeHtml(c.detalle || '')}</td>
+    </tr>
+  `).join('');
+  wrap.style.display = 'block';
+}
+
+async function verificar() {
+  const texto = document.getElementById('texto').value.trim();
+  if (!texto) {
+    setStatus('Pegá un texto para verificar.', 'error');
+    return;
+  }
+
+  const btn = document.getElementById('btn-verificar');
+  btn.disabled = true;
+  document.getElementById('resumen-wrap').style.display = 'none';
+  setStatus('Analizando el texto...', 'loading');
+
+  try {
+    const r = await fetch('/api/verificar', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ texto }),
+    });
+    const init = await r.json();
+    if (!r.ok || !init.job_id) throw new Error(init.error || 'Error al iniciar la verificación');
+
+    const data = await pollJob(init.job_id, {
+      onProgress: (ms) => {
+        const s = Math.round(ms / 1000);
+        setStatus(`Verificando citas contra IMPO y el BJN... (${s}s)`, 'loading');
+      }
+    });
+
+    setStatus('', '');
+    renderCitas(data.citas || []);
+  } catch (e) {
+    setStatus('Error: ' + e.message, 'error');
+  } finally {
+    btn.disabled = false;
+  }
+}
+</script>
+</body>
+</html>

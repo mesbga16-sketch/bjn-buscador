@@ -14,7 +14,6 @@
     --extracto: #4a5568;
     --rojo: #c0392b;
     --verde: #166534;
-    --ambar: #92400e;
   }
 
   * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -323,12 +322,12 @@
   }
   .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 
+  .header-links { margin-left: auto; display: flex; align-items: center; gap: 16px; }
   .bjn-link {
     font-size: 12px;
     color: rgba(255,255,255,0.75);
     text-decoration: none;
     border-bottom: 1px dotted rgba(255,255,255,0.4);
-    margin-left: auto;
   }
   .bjn-link:hover { color: white; }
 
@@ -396,62 +395,6 @@
     .filters-row { grid-template-columns: 1fr; }
   }
 
-  /* Pestañas */
-  .tab-bar { display: flex; gap: 6px; margin-bottom: 14px; }
-  .tab-btn {
-    padding: 9px 18px;
-    border: 1px solid var(--borde);
-    border-bottom: none;
-    border-radius: 6px 6px 0 0;
-    background: #e2e8f0;
-    color: var(--texto);
-    font-size: 14px;
-    font-weight: 600;
-    cursor: pointer;
-  }
-  .tab-btn.active { background: white; color: var(--azul); }
-
-  /* Verificador de citas */
-  #s-verificar-texto {
-    width: 100%;
-    min-height: 180px;
-    resize: vertical;
-    border: 1px solid var(--borde);
-    border-radius: 4px;
-    padding: 10px 12px;
-    font-size: 14px;
-    font-family: inherit;
-    color: var(--texto);
-  }
-  #s-verificar-texto:focus {
-    outline: none;
-    border-color: var(--azul-claro);
-    box-shadow: 0 0 0 2px rgba(37,99,168,0.12);
-  }
-  .citas-table { width: 100%; border-collapse: collapse; margin-top: 16px; font-size: 13px; }
-  .citas-table th {
-    text-align: left;
-    padding: 8px 10px;
-    background: var(--gris);
-    color: var(--azul);
-    font-size: 11px;
-    text-transform: uppercase;
-    letter-spacing: 0.3px;
-    border-bottom: 2px solid var(--borde);
-  }
-  .citas-table td { padding: 10px; border-bottom: 1px solid var(--borde); vertical-align: top; }
-  .citas-table tr:last-child td { border-bottom: none; }
-  .estado-badge {
-    display: inline-block;
-    padding: 2px 9px;
-    border-radius: 10px;
-    font-size: 11px;
-    font-weight: 700;
-    white-space: nowrap;
-  }
-  .estado-verificada    { background: #dcfce7; color: var(--verde); }
-  .estado-no_encontrada { background: #fee2e2; color: var(--rojo); }
-  .estado-no_verificable{ background: #fef3c7; color: var(--ambar); }
 </style>
 </head>
 <body>
@@ -460,18 +403,13 @@
   <div>
     <h1>Acceso no oficial a BJN - Base de Jurisprudencia Nacional</h1>
   </div>
-  <a class="bjn-link" href="https://bjn.poderjudicial.gub.uy/" target="_blank">Abrir BJN original</a>
+  <nav class="header-links">
+    <a class="bjn-link" href="/verificador">Verificador de citas legales</a>
+    <a class="bjn-link" href="https://bjn.poderjudicial.gub.uy/" target="_blank">Abrir BJN original</a>
+  </nav>
 </header>
 
 <div class="container">
-
-  <!-- Pestañas -->
-  <div class="tab-bar">
-    <button class="tab-btn active" id="tab-btn-buscar" onclick="mostrarTab('buscar')">Buscar jurisprudencia</button>
-    <button class="tab-btn" id="tab-btn-verificar" onclick="mostrarTab('verificar')">Verificar citas</button>
-  </div>
-
-  <div id="tab-buscar">
 
   <!-- Formulario de búsqueda -->
   <div class="search-panel">
@@ -604,33 +542,6 @@
       <button class="page-btn" id="btn-prev" onclick="cambiarPagina('prev')" disabled>&#8592; Anterior</button>
       <span class="page-info" id="page-info"></span>
       <button class="page-btn" id="btn-next" onclick="cambiarPagina('next')" disabled>Siguiente &#8594;</button>
-    </div>
-  </div>
-
-  </div> <!-- /tab-buscar -->
-
-  <!-- Verificador de citas -->
-  <div id="tab-verificar" style="display:none;">
-    <div class="search-panel">
-      <div class="field">
-        <label>Texto a verificar</label>
-        <textarea id="s-verificar-texto"
-          placeholder="Pegá acá un escrito, dictamen o resolución. Se buscarán citas a leyes, decretos y jurisprudencia (ej: &quot;Ley N.º 19.355&quot;, &quot;Decreto 152/013&quot;, &quot;Sentencia N.º 123/2020&quot;) y se verificará cada una contra IMPO y el BJN."></textarea>
-      </div>
-      <div style="margin-top:10px;">
-        <button class="btn btn-primary" onclick="verificarCitas()">Verificar citas</button>
-      </div>
-    </div>
-
-    <div id="verificar-status" class="status"></div>
-
-    <div id="verificar-resultado" style="display:none;">
-      <table class="citas-table">
-        <thead>
-          <tr><th>Cita</th><th>Tipo</th><th>Fuente</th><th>Estado</th><th>Detalle</th></tr>
-        </thead>
-        <tbody id="citas-tbody"></tbody>
-      </table>
     </div>
   </div>
 
@@ -1221,84 +1132,6 @@ function toggleInstrucciones() {
 
 // Cargar búsqueda desde URL si existe (enlace compartido)
 window.addEventListener('DOMContentLoaded', loadFromParams);
-
-// ─── Verificador de citas ──────────────────────────────────────────────────
-
-function mostrarTab(nombre) {
-  const esVerificar = nombre === 'verificar';
-  document.getElementById('tab-buscar').style.display = esVerificar ? 'none' : '';
-  document.getElementById('tab-verificar').style.display = esVerificar ? '' : 'none';
-  document.getElementById('tab-btn-buscar').classList.toggle('active', !esVerificar);
-  document.getElementById('tab-btn-verificar').classList.toggle('active', esVerificar);
-}
-
-function setVerificarStatus(msg, tipo) {
-  const el = document.getElementById('verificar-status');
-  if (!tipo) { el.className = 'status'; el.style.display = 'none'; return; }
-  el.className = 'status ' + tipo;
-  el.style.display = '';
-  el.innerHTML = msg;
-}
-
-const ESTADO_LABEL = {
-  verificada:     'Verificada',
-  no_encontrada:  'No encontrada',
-  no_verificable: 'No se pudo verificar',
-};
-
-function renderCitas(citas) {
-  const tbody     = document.getElementById('citas-tbody');
-  const resultado = document.getElementById('verificar-resultado');
-  if (!citas.length) {
-    resultado.style.display = 'none';
-    setVerificarStatus('No se encontraron citas legales reconocibles en el texto.', 'error');
-    return;
-  }
-  tbody.innerHTML = citas.map(c => `
-    <tr>
-      <td>${escapeHtml(c.cita)}</td>
-      <td>${escapeHtml(c.tipo)}</td>
-      <td>${escapeHtml(c.fuente)}</td>
-      <td><span class="estado-badge estado-${c.estado}">${ESTADO_LABEL[c.estado] || c.estado}</span></td>
-      <td>${c.url
-          ? `<a href="${escapeHtml(c.url)}" target="_blank" rel="noopener">${escapeHtml(c.detalle || 'Ver fuente')}</a>`
-          : escapeHtml(c.detalle || '')}</td>
-    </tr>
-  `).join('');
-  resultado.style.display = '';
-}
-
-async function verificarCitas() {
-  const texto = document.getElementById('s-verificar-texto').value.trim();
-  if (!texto) {
-    setVerificarStatus('Pegá un texto para verificar.', 'error');
-    return;
-  }
-  document.getElementById('verificar-resultado').style.display = 'none';
-  setVerificarStatus('Analizando el texto...', 'loading');
-
-  try {
-    const r = await fetch('/api/verificar', {
-      method:  'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify({ texto }),
-    });
-    const init = await r.json();
-    if (!r.ok || !init.job_id) throw new Error(init.error || 'Error al iniciar la verificación');
-
-    const data = await pollJob(init.job_id, {
-      onProgress: (ms) => {
-        const s = Math.round(ms / 1000);
-        setVerificarStatus(`Verificando citas contra IMPO y el BJN... (${s}s)`, 'loading');
-      }
-    });
-
-    setVerificarStatus('', '');
-    renderCitas(data.citas || []);
-  } catch (e) {
-    setVerificarStatus('Error: ' + e.message, 'error');
-  }
-}
 </script>
 
 </body>
