@@ -43,6 +43,17 @@ SERVER_CARD = {
                 },
             },
         },
+        {
+            "name": "verificar_texto",
+            "description": "Extrae y verifica citas legales uruguayas (leyes, decretos, jurisprudencia) contra IMPO y el BJN para detectar alucinaciones de IA.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "texto": {"type": "string", "description": "Texto a analizar en busca de citas legales"}
+                },
+                "required": ["texto"],
+            },
+        },
     ],
     "resources": [],
     "prompts": [],
@@ -120,6 +131,44 @@ async def obtener_detalle_sentencia(indice: int = 0) -> str:
     if url := resultado.get("popup_url"):
         partes.append(f"\nFuente oficial BJN: {url}")
     return "\n".join(partes)
+
+
+_ESTADO_ICONO = {"verificada": "✅", "no_encontrada": "❌", "no_verificable": "⚠️"}
+
+
+def _fmt_citas(citas: list) -> str:
+    lineas = []
+    for c in citas:
+        icono = _ESTADO_ICONO.get(c["estado"], "?")
+        lineas.append(
+            f"{icono} **{c['cita']}** ({c['fuente']}) — {c['estado']}\n{c.get('detalle', '')}"
+            + (f"\n{c['url']}" if c.get("url") else "")
+        )
+    return "\n\n".join(lineas)
+
+
+@mcp.tool()
+async def verificar_texto(texto: str) -> str:
+    """
+    Extrae citas legales uruguayas (leyes, decretos, jurisprudencia) de un texto y
+    verifica contra fuentes oficiales (IMPO, BJN) si existen realmente. Sirve para
+    detectar citas alucinadas por IA en escritos, dictámenes o resoluciones.
+
+    Args:
+        texto: Texto a analizar en busca de citas legales.
+
+    Returns:
+        Por cada cita: si fue verificada, no encontrada, o no se pudo verificar, con enlace.
+    """
+    async with httpx.AsyncClient(timeout=120) as client:
+        resp = await client.post(f"{BASE_URL}/api/verificar", json={"texto": texto})
+        resp.raise_for_status()
+        resultado = await _esperar_job(client, resp.json()["job_id"])
+
+    citas = resultado.get("citas", [])
+    if not citas:
+        return "No se encontraron citas legales reconocibles en el texto."
+    return f"Se encontraron {len(citas)} cita(s):\n\n" + _fmt_citas(citas)
 
 
 if __name__ == "__main__":

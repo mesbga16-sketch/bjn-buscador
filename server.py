@@ -10,12 +10,16 @@ v12: hardening de scraping - timeouts explícitos, try/except granulares,
 
 from flask import Flask, request, jsonify, send_from_directory
 import re, os, uuid, threading, queue, time
+import httpx
 from bs4 import BeautifulSoup
+from citations import extraer_citas
 
 app = Flask(__name__, static_folder='public')
 PORT = int(os.environ.get('PORT', 3737))
 
 BJN_SIMPLE = 'https://bjn.poderjudicial.gub.uy/BJNPUBLICA/busquedaSimple.seam'
+IMPO_BASE = 'https://www.impo.com.uy/bases'
+IMPO_TIPO_PATH = {'ley': 'leyes', 'decreto': 'decretos', 'decreto_ley': 'decretos-ley'}
 
 # ─── Job store ────────────────────────────────────────────────────────────────
 _jobs      = {}
@@ -210,6 +214,35 @@ def _playwright_worker():
 
         return {'titulo': titulo, 'detalle': detalle_text, 'popup_url': popup_url}
 
+    def verificar_jurisprudencia(cita):
+        """Busca la cita de jurisprudencia en el BJN real y confirma si existe."""
+        query = f"{cita['numero']}/{cita['anio']}"
+        try:
+            raw, _ = do_search({'texto': query, 'tipoBusqueda': 'FRASE_EXACTA', 'ordenar': 'RELEVANCIA'})
+        except Exception as e:
+            return {**cita, 'fuente': 'BJN', 'estado': 'no_verificable',
+                    'detalle': f'No se pudo consultar el BJN: {e}', 'url': None}
+        coincidencia = next(
+            (r for r in process_raw_results(raw)
+             if r.get('numero', '').replace('.', '') == cita['numero']),
+            None,
+        )
+        if coincidencia:
+            return {**cita, 'fuente': 'BJN', 'estado': 'verificada',
+                    'detalle': coincidencia.get('titulo', ''), 'url': BJN_SIMPLE}
+        return {**cita, 'fuente': 'BJN', 'estado': 'no_encontrada',
+                'detalle': 'No se encontró una sentencia con ese número en el BJN.', 'url': None}
+
+    def do_verificar(texto):
+        citas = extraer_citas(texto)
+        resultados = []
+        for cita in citas:
+            if cita['tipo'] == 'jurisprudencia':
+                resultados.append(verificar_jurisprudencia(cita))
+            else:
+                resultados.append(verificar_impo(cita))
+        return resultados
+
     # ── Loop principal del worker ─────────────────────────────────────────────
 
     while True:
@@ -239,6 +272,9 @@ def _playwright_worker():
             elif t == 'detalle':
                 res = do_detalle(task['index'])
                 _finish_job(jid, result=res)
+            elif t == 'verificar':
+                citas = do_verificar(task['texto'])
+                _finish_job(jid, result={'citas': citas, 'total': len(citas)})
         except Exception as e:
             _finish_job(jid, error=str(e))
 
@@ -254,6 +290,32 @@ def parse_title(titulo: str) -> dict:
 
 def process_raw_results(raw: list) -> list:
     return [{**r, **parse_title(r['titulo'])} for r in raw]
+
+
+def verificar_impo(cita: dict) -> dict:
+    """Consulta IMPO por una ley/decreto. Ante error o dato faltante, nunca marca
+    'no_encontrada' — usa 'no_verificable' para no dar un falso negativo."""
+    tipo_path = IMPO_TIPO_PATH.get(cita['tipo'])
+    if not cita.get('anio'):
+        return {**cita, 'fuente': 'IMPO', 'estado': 'no_verificable',
+                'detalle': 'No se pudo determinar el año de la norma en el texto citado.',
+                'url': None}
+
+    url = f"{IMPO_BASE}/{tipo_path}/{cita['numero']}-{cita['anio']}"
+    try:
+        r = httpx.get(url, params={'json': 'true'}, timeout=10, follow_redirects=True)
+    except httpx.HTTPError as e:
+        return {**cita, 'fuente': 'IMPO', 'estado': 'no_verificable',
+                'detalle': f'No se pudo consultar IMPO: {e}', 'url': url}
+
+    if r.status_code == 404:
+        return {**cita, 'fuente': 'IMPO', 'estado': 'no_encontrada',
+                'detalle': 'IMPO no tiene registrada una norma con ese número y año.', 'url': url}
+    if r.status_code != 200:
+        return {**cita, 'fuente': 'IMPO', 'estado': 'no_verificable',
+                'detalle': f'IMPO respondió con estado {r.status_code}.', 'url': url}
+    return {**cita, 'fuente': 'IMPO', 'estado': 'verificada',
+            'detalle': 'Norma encontrada en IMPO.', 'url': url}
 
 
 # ─── Rutas ────────────────────────────────────────────────────────────────────
@@ -307,6 +369,15 @@ def detalle():
     jid = _submit_job({'type': 'detalle', 'index': index})
     return jsonify({'job_id': jid})
 
+@app.route('/api/verificar', methods=['POST'])
+def verificar():
+    data  = request.get_json() or {}
+    texto = data.get('texto', '').strip()
+    if not texto:
+        return jsonify({'error': 'Ingrese un texto para verificar.'}), 400
+    jid = _submit_job({'type': 'verificar', 'texto': texto})
+    return jsonify({'job_id': jid})
+
 @app.route('/api/status', methods=['GET'])
 def status():
     jid = _new_job()
@@ -338,7 +409,9 @@ _mcp = _FastMCP(
         'Buscador de sentencias del Poder Judicial de Uruguay (BJN). '
         'Usa buscar_jurisprudencia para encontrar sentencias. '
         'Usa obtener_detalle con el index del resultado para leer el texto completo. '
-        'Usa navegar_pagina con next o prev para paginar resultados.'
+        'Usa navegar_pagina con next o prev para paginar resultados. '
+        'Usa verificar_texto para detectar citas legales (leyes, decretos, jurisprudencia) '
+        'alucinadas por IA, verificándolas contra IMPO y el BJN.'
     ),
 )
 
@@ -445,6 +518,44 @@ def navegar_pagina(direccion: str = 'next') -> str:
     if not results:
         return 'No hay más resultados en esa dirección.'
     return _fmt(results)
+
+
+_ESTADO_ICONO = {'verificada': '✅', 'no_encontrada': '❌', 'no_verificable': '⚠️'}
+
+
+def _fmt_citas(citas: list) -> str:
+    lines = []
+    for c in citas:
+        icono = _ESTADO_ICONO.get(c['estado'], '?')
+        lines.append(
+            f"{icono} **{c['cita']}** ({c['fuente']}) — {c['estado']}\n{c.get('detalle', '')}"
+            + (f"\n{c['url']}" if c.get('url') else '')
+        )
+    return '\n\n'.join(lines)
+
+
+@_mcp.tool()
+def verificar_texto(texto: str) -> str:
+    """
+    Extrae citas legales uruguayas (leyes, decretos, jurisprudencia) de un texto y
+    verifica contra fuentes oficiales (IMPO, BJN) si existen realmente. Sirve para
+    detectar citas alucinadas por IA en escritos, dictámenes o resoluciones.
+
+    Args:
+        texto: Texto a analizar en busca de citas legales.
+
+    Returns:
+        Por cada cita: si fue verificada, no encontrada, o no se pudo verificar, con enlace.
+    """
+    r = _httpx.post(f'{_LOCAL}/api/verificar', json={'texto': texto}, timeout=30)
+    r.raise_for_status()
+    data = _poll_local(r.json()['job_id'], timeout=90)
+    if data.get('status') == 'error':
+        return f"Error: {data.get('error', 'desconocido')}"
+    citas = data.get('citas', [])
+    if not citas:
+        return 'No se encontraron citas legales reconocibles en el texto.'
+    return f"Se encontraron {len(citas)} cita(s):\n\n" + _fmt_citas(citas)
 
 
 # App ASGI combinada: /mcp → MCP, todo lo demás → Flask
