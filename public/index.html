@@ -322,12 +322,12 @@
   }
   .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 
+  .header-links { margin-left: auto; display: flex; align-items: center; gap: 16px; }
   .bjn-link {
     font-size: 12px;
     color: rgba(255,255,255,0.75);
     text-decoration: none;
     border-bottom: 1px dotted rgba(255,255,255,0.4);
-    margin-left: auto;
   }
   .bjn-link:hover { color: white; }
 
@@ -394,6 +394,7 @@
   @media (max-width: 400px) {
     .filters-row { grid-template-columns: 1fr; }
   }
+
 </style>
 </head>
 <body>
@@ -402,7 +403,10 @@
   <div>
     <h1>Acceso no oficial a BJN - Base de Jurisprudencia Nacional</h1>
   </div>
-  <a class="bjn-link" href="https://bjn.poderjudicial.gub.uy/" target="_blank">Abrir BJN original</a>
+  <nav class="header-links">
+    <a class="bjn-link" href="/verificador">Verificador de citas legales</a>
+    <a class="bjn-link" href="https://bjn.poderjudicial.gub.uy/" target="_blank">Abrir BJN original</a>
+  </nav>
 </header>
 
 <div class="container">
@@ -540,7 +544,6 @@
       <button class="page-btn" id="btn-next" onclick="cambiarPagina('next')" disabled>Siguiente &#8594;</button>
     </div>
   </div>
-
 
 </div>
 
