@@ -17,6 +17,18 @@
   }
 
   * { box-sizing: border-box; margin: 0; padding: 0; }
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+  :focus-visible { outline: 3px solid #f59e0b; outline-offset: 2px; }
 
   body {
     font-family: 'Segoe UI', Arial, sans-serif;
@@ -61,6 +73,18 @@
   }
 
   .field { display: flex; flex-direction: column; gap: 4px; }
+  .checkbox-field {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 36px;
+    color: var(--texto);
+    font-size: 13px;
+    text-transform: none;
+    letter-spacing: 0;
+  }
+  .checkbox-field input { width: 16px; height: 16px; accent-color: var(--azul-claro); }
+  .checkbox-field a { color: var(--azul-claro); font-size: 11px; }
 
   label {
     font-size: 11px;
@@ -275,6 +299,7 @@
     margin-top: 14px;
     display: none;
   }
+  .status:focus { outline: 2px solid var(--azul-claro); outline-offset: 2px; }
   .status.loading { background: #eff6ff; color: var(--azul); border: 1px solid #bfdbfe; display: block; }
   .status.error   { background: #fef2f2; color: var(--rojo); border: 1px solid #fca5a5; display: block; }
 
@@ -409,7 +434,7 @@
   </nav>
 </header>
 
-<div class="container">
+<main class="container">
 
   <!-- Formulario de búsqueda -->
   <div class="search-panel">
@@ -417,18 +442,20 @@
     <!-- Fila principal: texto + botón -->
     <div class="search-main">
       <div class="field">
-        <label>Texto a buscar</label>
+        <label for="s-texto">Texto a buscar</label>
         <input type="text" id="s-texto"
                placeholder="ej: despido abusivo, accidente laboral, responsabilidad estatal..."
+               autocomplete="off" aria-describedby="texto-ayuda"
                onkeydown="if(event.key==='Enter') buscar()">
+        <span id="texto-ayuda" class="sr-only">Ingresá palabras o una frase para consultar el texto de las sentencias.</span>
       </div>
-      <button class="btn btn-primary" onclick="buscar()" style="padding:8px 28px; align-self:flex-end;">Buscar</button>
+      <button type="button" class="btn btn-primary" onclick="buscar()" style="padding:8px 28px; align-self:flex-end;">Buscar</button>
     </div>
 
     <!-- Fila de filtros -->
     <div class="filters-row">
       <div class="field">
-        <label>Tipo de búsqueda</label>
+        <label for="s-tipo">Tipo de búsqueda</label>
         <select id="s-tipo">
           <option value="TODAS_LAS_PALABRAS">Todas las palabras</option>
           <option value="FRASE_EXACTA">Frase exacta</option>
@@ -437,7 +464,7 @@
         </select>
       </div>
       <div class="field">
-        <label>Tipo de sentencia</label>
+        <label for="s-tipo-sentencia">Tipo de sentencia</label>
         <select id="s-tipo-sentencia">
           <option value="">Todas</option>
           <option value="definitiva">Definitiva</option>
@@ -445,13 +472,18 @@
         </select>
       </div>
       <div class="field">
-        <label>Ordenar por</label>
+        <label for="s-ordenar">Ordenar por</label>
         <select id="s-ordenar">
           <option value="RELEVANCIA">Relevancia</option>
           <option value="FECHA_DESCENDENTE">Fecha (más reciente)</option>
           <option value="FECHA_ASCENDENTE">Fecha (más antigua)</option>
         </select>
       </div>
+      <label class="checkbox-field" for="s-sinonimos">
+        <input type="checkbox" id="s-sinonimos">
+        <span>Incluir sinónimos</span>
+        <a href="https://bjn.poderjudicial.gub.uy/BJNPUBLICA/ListadoSinonimos.seam" target="_blank" rel="noopener" title="Consultar el listado oficial de sinónimos">ver lista</a>
+      </label>
     </div>
 
     <!-- Historial -->
@@ -460,9 +492,9 @@
 
   <!-- Instrucciones de uso -->
   <div class="instrucciones">
-    <div class="instrucciones-titulo" onclick="toggleInstrucciones()">
+    <div class="instrucciones-titulo" role="button" tabindex="0" aria-expanded="false" aria-controls="instrucciones-body" onclick="toggleInstrucciones()" onkeydown="if(event.key==='Enter'||event.key===' ') { event.preventDefault(); toggleInstrucciones(); }">
       <span>&#9432; Cómo usar el buscador</span>
-      <span id="instrucciones-chevron" style="font-size:11px;">&#9660;</span>
+      <span id="instrucciones-chevron" style="font-size:11px;" aria-hidden="true">&#9660;</span>
     </div>
     <div id="instrucciones-body" style="display:none;">
       <div class="instrucciones-grid">
@@ -509,43 +541,43 @@
   </div>
 
   <!-- Status con timer -->
-  <div id="status" class="status"></div>
+  <div id="status" class="status" role="status" aria-live="polite" aria-atomic="true"></div>
 
   <!-- Resultados -->
   <div id="results-area" style="display:none;">
     <div class="results-header">
       <div class="results-count" id="results-count"></div>
       <div class="results-actions">
-        <button class="btn-icon" onclick="compartirBusqueda()" title="Copiar enlace a esta búsqueda">&#128279; Compartir</button>
+          <button type="button" class="btn-icon" onclick="compartirBusqueda()" title="Copiar enlace a esta búsqueda">&#128279; Compartir</button>
       </div>
     </div>
     <!-- Detalle de sentencia (arriba de la lista para visibilidad inmediata) -->
-    <div id="detail-panel" class="detail-panel">
+      <div id="detail-panel" class="detail-panel" aria-live="polite">
       <div class="detail-header">
         <div>
           <div class="detail-title" id="detail-title"></div>
           <div class="detail-meta" id="detail-meta"></div>
         </div>
         <div class="detail-actions">
-          <button class="btn-icon" onclick="copiarTexto()" title="Copiar texto completo">&#128203; Copiar</button>
-          <button class="btn-icon" onclick="exportarTxt()" title="Descargar como archivo de texto">&#128190; Exportar .txt</button>
-          <button class="btn-icon" onclick="cerrarDetalle()">&#x2715; Cerrar</button>
+          <button type="button" class="btn-icon" onclick="copiarTexto()" title="Copiar texto completo">&#128203; Copiar</button>
+          <button type="button" class="btn-icon" onclick="exportarTxt()" title="Descargar como archivo de texto">&#128190; Exportar .txt</button>
+          <button type="button" class="btn-icon" onclick="cerrarDetalle()">&#x2715; Cerrar</button>
         </div>
       </div>
-      <div class="detail-body" id="detail-body"></div>
+      <div class="detail-body" id="detail-body" tabindex="0"></div>
     </div>
 
     <div class="result-list" id="result-list"></div>
 
     <!-- Paginacion -->
     <div class="pagination" id="pagination" style="display:none;">
-      <button class="page-btn" id="btn-prev" onclick="cambiarPagina('prev')" disabled>&#8592; Anterior</button>
+      <button type="button" class="page-btn" id="btn-prev" onclick="cambiarPagina('prev')" disabled>&#8592; Anterior</button>
       <span class="page-info" id="page-info"></span>
-      <button class="page-btn" id="btn-next" onclick="cambiarPagina('next')" disabled>Siguiente &#8594;</button>
+      <button type="button" class="page-btn" id="btn-next" onclick="cambiarPagina('next')" disabled>Siguiente &#8594;</button>
     </div>
   </div>
 
-</div>
+</main>
 
 <!-- Toast de compartir -->
 <div class="toast" id="toast"></div>
@@ -560,33 +592,51 @@ let timerStart       = 0;
 // Generación de búsqueda: se incrementa cada vez que se inicia una nueva búsqueda.
 // Permite que los polls de búsquedas anteriores se ignoren automáticamente.
 let _searchGen = 0;
+let _detailGen = 0;
+let _detailAbort = null;
 let _isBusy    = false;  // true mientras hay un job de búsqueda activo
 
 // ─── Status con timer ──────────────────────────────────────────────────────
 
 function setStatus(msg, tipo) {
   const el = document.getElementById('status');
+  const wasLoading = el.classList.contains('loading');
   clearInterval(timerInterval);
   timerInterval = null;
 
   if (!tipo) {
     el.className = 'status';
     el.style.display = 'none';
+    el.textContent = '';
     return;
   }
 
   el.className = 'status ' + tipo;
+  el.style.display = 'block';
+
+  const render = () => {
+    el.replaceChildren();
+    if (tipo === 'loading') {
+      const spinner = document.createElement('span');
+      spinner.className = 'spinner';
+      spinner.setAttribute('aria-hidden', 'true');
+      const text = document.createElement('span');
+      text.textContent = msg;
+      const timer = document.createElement('span');
+      timer.className = 'timer';
+      timer.textContent = `(${((Date.now() - timerStart) / 1000).toFixed(0)}s)`;
+      el.append(spinner, text, timer);
+    } else {
+      el.textContent = msg;
+    }
+  };
 
   if (tipo === 'loading') {
-    timerStart = Date.now();
-    const render = () => {
-      const seg = ((Date.now() - timerStart) / 1000).toFixed(0);
-      el.innerHTML = `<span class="spinner"></span>${msg}<span class="timer">(${seg}s)</span>`;
-    };
+    if (!wasLoading) timerStart = Date.now();
     render();
     timerInterval = setInterval(render, 1000);
   } else {
-    el.innerHTML = msg;
+    render();
   }
 }
 
@@ -622,6 +672,7 @@ function histAdd(payload) {
     tipo:         payload.tipoBusqueda,
     tipoSentencia: payload.tipoSentencia || '',
     ordenar:      payload.ordenar,
+    sinonimos:    Boolean(payload.sinonimos),
     ts:           Date.now()
   });
   histSave(items.slice(0, HIST_MAX));
@@ -651,6 +702,7 @@ function histApply(idx) {
   document.getElementById('s-tipo').value           = item.tipo  || 'TODAS_LAS_PALABRAS';
   document.getElementById('s-tipo-sentencia').value = item.tipoSentencia || '';
   document.getElementById('s-ordenar').value        = item.ordenar || 'RELEVANCIA';
+  document.getElementById('s-sinonimos').checked     = Boolean(item.sinonimos);
   buscar();
 }
 
@@ -672,6 +724,7 @@ function buildPayload() {
     tipoBusqueda:  document.getElementById('s-tipo').value,
     tipoSentencia: document.getElementById('s-tipo-sentencia').value,
     ordenar:       document.getElementById('s-ordenar').value,
+    sinonimos:     document.getElementById('s-sinonimos').checked,
   };
 }
 
@@ -681,6 +734,7 @@ function payloadToParams(p) {
   if (p.tipoBusqueda && p.tipoBusqueda !== 'TODAS_LAS_PALABRAS') params.set('t', p.tipoBusqueda);
   if (p.tipoSentencia) params.set('ts', p.tipoSentencia);
   if (p.ordenar && p.ordenar !== 'RELEVANCIA') params.set('o', p.ordenar);
+  if (p.sinonimos) params.set('s', '1');
   return params;
 }
 
@@ -691,6 +745,7 @@ function loadFromParams() {
   document.getElementById('s-tipo').value           = params.get('t') || 'TODAS_LAS_PALABRAS';
   document.getElementById('s-tipo-sentencia').value = params.get('ts') || '';
   document.getElementById('s-ordenar').value        = params.get('o') || 'RELEVANCIA';
+  document.getElementById('s-sinonimos').checked     = params.get('s') === '1';
   buscar();
 }
 
@@ -722,8 +777,9 @@ async function pollJob(jobId, { onProgress, maxWaitMs = 120000, intervalMs = 200
     // Si la búsqueda fue cancelada (el usuario inició una nueva), salir silenciosamente
     if (signal && signal.aborted) throw new DOMException('Cancelado', 'AbortError');
     if (onProgress) onProgress(elapsed);
-    const r    = await fetch(`/api/job/${jobId}`, { signal });
+    const r = await fetch(`/api/job/${jobId}`, { signal });
     const data = await r.json();
+    if (!r.ok) throw new Error(data.error || 'El servidor no pudo completar la consulta.');
     if (data.status === 'pending') continue;
     if (data.status === 'error') throw new Error(data.error || 'Error desconocido');
     if (data.status === 'done') return data;
@@ -761,6 +817,7 @@ async function buscar() {
 
   ultimaBusqueda = payload;
   _setBusyState(true);
+  timerStart = Date.now();
   setStatus('Consultando el BJN...', 'loading');
   document.getElementById('results-area').style.display = 'none';
   cerrarDetalle();
@@ -799,7 +856,8 @@ async function buscar() {
 
     histAdd(payload);
     setStatus('', '');
-    history.replaceState(null, '', window.location.pathname);
+    const sharedParams = payloadToParams(payload).toString();
+    history.replaceState(null, '', `${window.location.pathname}${sharedParams ? `?${sharedParams}` : ''}`);
     renderResults(data);
   } catch (e) {
     if (e.name === 'AbortError') return;  // Cancelado por nueva búsqueda, ignorar
@@ -972,7 +1030,16 @@ function renderResults(data) {
     resultados.forEach((r, i) => {
       const card = document.createElement('div');
       card.className = 'result-card';
+      card.setAttribute('role', 'button');
+      card.setAttribute('tabindex', '0');
+      card.setAttribute('aria-label', `Abrir sentencia ${r.numero || 'sin número'}`);
       card.onclick   = () => cargarDetalle(data.results.indexOf(r), card);
+      card.onkeydown = (event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          cargarDetalle(data.results.indexOf(r), card);
+        }
+      };
 
       // Badge de tipo de sentencia con color diferenciado
       let tipoBadge = '';
@@ -1007,6 +1074,10 @@ async function cargarDetalle(index, cardEl) {
   document.querySelectorAll('.result-card').forEach(c => c.classList.remove('selected'));
   if (cardEl) cardEl.classList.add('selected');
 
+  if (_detailAbort) _detailAbort.abort();
+  _detailAbort = new AbortController();
+  const detailGen = ++_detailGen;
+  const detailSignal = _detailAbort.signal;
   const payload = { index };
 
   // Mostrar panel de carga INMEDIATAMENTE y hacer scroll hacia él
@@ -1029,11 +1100,13 @@ async function cargarDetalle(index, cardEl) {
       method:  'POST',
       headers: { 'Content-Type': 'application/json' },
       body:    JSON.stringify(payload),
+      signal:  detailSignal,
     });
     const init = await r.json();
     if (!r.ok || !init.job_id) throw new Error(init.error || 'Error al cargar la sentencia');
 
     const data = await pollJob(init.job_id, {
+      signal: detailSignal,
       onProgress: (ms) => {
         const s = Math.round(ms / 1000);
         document.getElementById('detail-meta').textContent =
@@ -1043,6 +1116,7 @@ async function cargarDetalle(index, cardEl) {
       intervalMs: 1500
     });
 
+    if (_detailGen !== detailGen) return;
     setStatus('', '');
 
     document.getElementById('detail-title').textContent = data.titulo || '';
@@ -1064,6 +1138,8 @@ async function cargarDetalle(index, cardEl) {
     panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
   } catch (e) {
+    if (e.name === 'AbortError') return;
+    if (_detailGen !== detailGen) return;
     const msg = e.message || '';
     const sinTexto = msg.includes('no tiene texto publicado');
     document.getElementById('detail-body').innerHTML = sinTexto
@@ -1112,6 +1188,8 @@ function exportarTxt() {
 }
 
 function cerrarDetalle() {
+  if (_detailAbort) _detailAbort.abort();
+  _detailGen += 1;
   document.getElementById('detail-panel').classList.remove('active');
   document.getElementById('detail-body').innerHTML = '';
   document.getElementById('detail-title').textContent = '';
@@ -1126,6 +1204,8 @@ function toggleInstrucciones() {
   const visible = body.style.display !== 'none';
   body.style.display    = visible ? 'none' : 'block';
   chevron.innerHTML     = visible ? '&#9660;' : '&#9650;';
+  const trigger = document.querySelector('.instrucciones-titulo');
+  if (trigger) trigger.setAttribute('aria-expanded', String(!visible));
 }
 
 // ─── Inicialización ────────────────────────────────────────────────────────

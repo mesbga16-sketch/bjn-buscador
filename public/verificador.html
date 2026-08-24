@@ -20,6 +20,7 @@
   }
 
   * { box-sizing: border-box; margin: 0; padding: 0; }
+  :focus-visible { outline: 3px solid #f59e0b; outline-offset: 2px; }
 
   body {
     font-family: 'Segoe UI', Arial, sans-serif;
@@ -114,10 +115,14 @@
   }
   .btn:hover:not(:disabled) { opacity: 0.88; }
   .btn:disabled { opacity: 0.6; cursor: default; }
+  .btn-secondary { background: white; color: var(--verde); border: 1px solid var(--borde); }
+
+  .ayuda { margin-top: 6px; color: #667; font-size: 12px; }
 
   .status { font-size: 13px; color: #445048; display: none; align-items: center; gap: 8px; }
   .status.visible { display: flex; }
   .status.error { color: var(--rojo); }
+  .status.info { color: #445048; }
 
   .spinner {
     width: 13px; height: 13px;
@@ -208,7 +213,7 @@
   </nav>
 </header>
 
-<div class="container">
+<main class="container">
 
   <div class="hero">
     <h2>¿La cita existe, o la inventó la IA?</h2>
@@ -225,10 +230,12 @@
 
   <div class="panel">
     <label for="texto">Texto a verificar</label>
-    <textarea id="texto" placeholder="Pegá acá el texto. Ejemplos de citas que se detectan: &#10;&#8226; Ley N.º 19.355&#10;&#8226; Decreto N.º 152/013&#10;&#8226; Decreto-Ley 14.500&#10;&#8226; Sentencia N.º 123/2020"></textarea>
+    <textarea id="texto" placeholder="Pegá acá el texto. Ejemplos de citas que se detectan: &#10;&#8226; Ley N.º 19.355&#10;&#8226; Decreto N.º 152/013&#10;&#8226; Decreto-Ley 14.500&#10;&#8226; Sentencia N.º 123/2020" aria-describedby="texto-ayuda"></textarea>
+    <div id="texto-ayuda" class="ayuda">Se reconocen leyes, decretos, decretos-ley y referencias de jurisprudencia uruguaya.</div>
     <div class="acciones">
-      <button class="btn" id="btn-verificar" onclick="verificar()">Verificar citas</button>
-      <div class="status" id="status"><span class="spinner"></span><span id="status-msg"></span></div>
+      <button type="button" class="btn" id="btn-verificar" onclick="verificar()">Verificar citas</button>
+      <button type="button" class="btn btn-secondary" id="btn-cancelar" onclick="cancelarVerificacion()" hidden>Cancelar</button>
+      <div class="status" id="status" role="status" aria-live="polite" aria-atomic="true"><span class="spinner" aria-hidden="true"></span><span id="status-msg"></span></div>
     </div>
   </div>
 
@@ -250,7 +257,7 @@
     </div>
   </div>
 
-</div>
+</main>
 
 <footer>
   <strong>Cómo funciona:</strong> las leyes y decretos se verifican contra el Registro Nacional de
@@ -276,15 +283,17 @@ const ESTADO_LABEL = {
   no_verificable: 'No se pudo verificar',
 };
 
-async function pollJob(jobId, { onProgress, maxWaitMs = 120000, intervalMs = 2000 } = {}) {
+async function pollJob(jobId, { onProgress, maxWaitMs = 120000, intervalMs = 2000, signal } = {}) {
   const deadline = Date.now() + maxWaitMs;
   let elapsed = 0;
   while (Date.now() < deadline) {
     await new Promise(res => setTimeout(res, intervalMs));
     elapsed += intervalMs;
+    if (signal?.aborted) throw new DOMException('Cancelado', 'AbortError');
     if (onProgress) onProgress(elapsed);
-    const r    = await fetch(`/api/job/${jobId}`);
+    const r = await fetch(`/api/job/${jobId}`, { signal });
     const data = await r.json();
+    if (!r.ok) throw new Error(data.error || 'El servidor no pudo completar la verificación.');
     if (data.status === 'pending') continue;
     if (data.status === 'error') throw new Error(data.error || 'Error desconocido');
     if (data.status === 'done') return data;
@@ -344,6 +353,16 @@ function renderCitas(citas) {
   wrap.style.display = 'block';
 }
 
+let _verifyAbort = null;
+
+function cancelarVerificacion() {
+  if (_verifyAbort) _verifyAbort.abort();
+  _verifyAbort = null;
+  document.getElementById('btn-verificar').disabled = false;
+  document.getElementById('btn-cancelar').hidden = true;
+  setStatus('Verificación cancelada.', 'info');
+}
+
 async function verificar() {
   const texto = document.getElementById('texto').value.trim();
   if (!texto) {
@@ -352,7 +371,11 @@ async function verificar() {
   }
 
   const btn = document.getElementById('btn-verificar');
+  const cancelBtn = document.getElementById('btn-cancelar');
+  if (_verifyAbort) _verifyAbort.abort();
+  _verifyAbort = new AbortController();
   btn.disabled = true;
+  cancelBtn.hidden = false;
   document.getElementById('resumen-wrap').style.display = 'none';
   setStatus('Analizando el texto...', 'loading');
 
@@ -361,11 +384,13 @@ async function verificar() {
       method:  'POST',
       headers: { 'Content-Type': 'application/json' },
       body:    JSON.stringify({ texto }),
+      signal:  _verifyAbort.signal,
     });
     const init = await r.json();
     if (!r.ok || !init.job_id) throw new Error(init.error || 'Error al iniciar la verificación');
 
     const data = await pollJob(init.job_id, {
+      signal: _verifyAbort.signal,
       onProgress: (ms) => {
         const s = Math.round(ms / 1000);
         setStatus(`Verificando citas contra IMPO y el BJN... (${s}s)`, 'loading');
@@ -375,9 +400,12 @@ async function verificar() {
     setStatus('', '');
     renderCitas(data.citas || []);
   } catch (e) {
+    if (e.name === 'AbortError') return;
     setStatus('Error: ' + e.message, 'error');
   } finally {
     btn.disabled = false;
+    cancelBtn.hidden = true;
+    _verifyAbort = null;
   }
 }
 </script>
