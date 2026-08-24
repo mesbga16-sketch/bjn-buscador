@@ -738,14 +738,64 @@ function payloadToParams(p) {
   return params;
 }
 
+// Cachear el último resultado permite que una recarga muestre la búsqueda
+// inmediatamente, sin dejar la página vacía mientras vuelve a consultar el BJN.
+const RESULTS_CACHE_KEY = 'bjn_last_results_v1';
+const RESULTS_CACHE_MAX_AGE = 30 * 60 * 1000;
+
+function sameSearch(a, b) {
+  if (!a || !b) return false;
+  return a.texto === b.texto
+    && a.tipoBusqueda === b.tipoBusqueda
+    && (a.tipoSentencia || '') === (b.tipoSentencia || '')
+    && a.ordenar === b.ordenar
+    && Boolean(a.sinonimos) === Boolean(b.sinonimos);
+}
+
+function cacheResults(payload, data) {
+  if (!data || !Array.isArray(data.results)) return;
+  try {
+    sessionStorage.setItem(RESULTS_CACHE_KEY, JSON.stringify({
+      savedAt: Date.now(),
+      payload,
+      data,
+    }));
+  } catch (e) {
+    // La caché es opcional: si el navegador la bloquea, la búsqueda sigue funcionando.
+  }
+}
+
+function restoreCachedResults(payload) {
+  try {
+    const raw = sessionStorage.getItem(RESULTS_CACHE_KEY);
+    if (!raw) return false;
+    const cached = JSON.parse(raw);
+    if (Date.now() - Number(cached.savedAt) > RESULTS_CACHE_MAX_AGE
+        || !sameSearch(cached.payload, payload)
+        || !cached.data
+        || !Array.isArray(cached.data.results)) {
+      sessionStorage.removeItem(RESULTS_CACHE_KEY);
+      return false;
+    }
+    ultimaBusqueda = payload;
+    setStatus('', '');
+    renderResults(cached.data);
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+
 function loadFromParams() {
   const params = new URLSearchParams(window.location.search);
   if (!params.get('q')) return;
   document.getElementById('s-texto').value          = params.get('q') || '';
   document.getElementById('s-tipo').value           = params.get('t') || 'TODAS_LAS_PALABRAS';
   document.getElementById('s-tipo-sentencia').value = params.get('ts') || '';
-  document.getElementById('s-ordenar').value        = params.get('o') || 'RELEVANCIA';
+  document.getElementById('s-ordenar').value       = params.get('o') || 'RELEVANCIA';
   document.getElementById('s-sinonimos').checked     = params.get('s') === '1';
+  const payload = buildPayload();
+  if (restoreCachedResults(payload)) return;
   buscar();
 }
 
@@ -858,6 +908,7 @@ async function buscar() {
     setStatus('', '');
     const sharedParams = payloadToParams(payload).toString();
     history.replaceState(null, '', `${window.location.pathname}${sharedParams ? `?${sharedParams}` : ''}`);
+    cacheResults(payload, data);
     renderResults(data);
   } catch (e) {
     if (e.name === 'AbortError') return;  // Cancelado por nueva búsqueda, ignorar
@@ -891,6 +942,7 @@ async function cambiarPagina(direction) {
     });
 
     setStatus('', '');
+    cacheResults(ultimaBusqueda, data);
     renderResults(data);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   } catch (e) {
