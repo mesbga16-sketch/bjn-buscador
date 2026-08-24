@@ -1029,7 +1029,10 @@
     if (!y) return null;
     y = String(y);
     if (y.length === 2) return Number(y) <= 30 ? '20' + y : '19' + y;
-    if (y.length === 3) return '1' + y;
+    if (y.length === 3) {
+      var shortYear = Number(y.slice(-2));
+      return shortYear <= (new Date().getFullYear() % 100) ? '20' + y.slice(-2) : '19' + y.slice(-2);
+    }
     return y;
   }
 
@@ -1074,6 +1077,39 @@
         m.tag = p.tag; m.kind = p.kind; m.numGroup = p.numGroup; m.yearGroup = p.yearGroup; all.push(m);
       });
     });
+
+    // Referencias como "Ley: N° 18.331", "Decreto: 152/013" o "la 18.331".
+    // Se incorporan solo cuando el contexto cercano permite distinguir la clase normativa.
+    findAll(/(?<![\w./])(?:N(?:ro\.?|[.\s]*[°ºo])\s*)?(\d{1,2}\.?\d{3})(?![\w/])/gi, text).forEach(function (m) {
+      var left = text.slice(Math.max(0, m.start - 90), m.start);
+      var right = text.slice(m.end, Math.min(text.length, m.end + 45));
+      var context = left + right;
+      var kind = /\bdecreto[\s-]*ley(?:es)?\b/i.test(context) ? 'decreto-ley' :
+        (/\bdecretos?\b/i.test(context) ? 'decreto' : (/\bley(?:es)?\b/i.test(context) ? 'ley' : null));
+      if (!kind) return;
+      var marker = text.slice(Math.max(0, m.start - 8), m.start).match(/N(?:ro\.?|[.\s]*[°ºo])\s*$/i);
+      if (marker) {
+        m.start -= marker[0].length;
+        m.raw = text.slice(m.start, m.end);
+      }
+      m.tag = 'Número normativo contextual';
+      m.kind = kind;
+      m.numGroup = 1;
+      m.yearGroup = null;
+      all.push(m);
+    });
+
+    findAll(/(?<![\w./])(\d{1,4})\s*\/\s*(\d{2,4})(?![\w/])/gi, text).forEach(function (m) {
+      var left = text.slice(Math.max(0, m.start - 90), m.start);
+      var right = text.slice(m.end, Math.min(text.length, m.end + 45));
+      var context = left + right;
+      if (!/\bdecreto(?:s)?\b/i.test(context)) return;
+      m.tag = 'Número de decreto contextual';
+      m.kind = 'decreto';
+      m.numGroup = 1;
+      m.yearGroup = 2;
+      all.push(m);
+    });
     return dedupeMatches(all);
   }
 
@@ -1081,6 +1117,7 @@
     var tribunal = '(?:SCJ|Suprema Corte de Justicia|TAT(?:\\s*(?:de\\s*)?[1-4][.°ºa-z]*\\s*T(?:urno)?)?|Tribunal(?:es)? de Apelaciones(?: del Trabajo| en lo Civil| de Familia| en lo Penal)?(?:\\s*(?:de\\s*)?[1-7][.°ºa-z]*\\s*T(?:urno)?)?|Juzgado Letrado(?: de Primera Instancia)?[^.;\\n]{0,55})';
     var patterns = [
       { re: new RegExp('\\b' + tribunal + '[^.;\\n]{0,90}?sentencia\\s*(?:definitiva|interlocutoria)?\\s*(?:N(?:ro\\.?)?(?:\\.\\s*[°ºo]?|[°º]|o\\.?)?\\s*)?\\d{1,6}\\s*(?:\\/|de)\\s*\\d{2,4}(?:[^.;\\n]{0,45}?\\d{1,2}[\\/.-]\\d{1,2}[\\/.-]\\d{2,4})?', 'gi'), tag: 'Tribunal y sentencia', kind: 'fallo' },
+      { re: /\b(?:SEF|DFA|SCJ|TAT|TAC|TAP|TCA)\s*(?:N(?:ro\.?)?(?:\.\s*[°ºo]?|[°º]|o\.?)?\s*)?\d{1,4}(?:[.-]\d{1,6})*\s*(?:\/|de)\s*\d{2,4}\b/gi, tag: 'Identificador jurisprudencial', kind: 'fallo' },
       { re: /\bIUE\s*[:\-]?\s*\d{1,3}-\d{1,9}\/\d{4}\b/gi, tag: 'IUE', kind: 'iue' },
       { re: /\b(?:ficha|ficha electrónica)\s*(?:N[.°ºo]\s*)?\d{1,3}-\d{1,9}\/\d{4}\b/gi, tag: 'Ficha', kind: 'iue' },
       { re: /\bsentencia\s*(?:definitiva|interlocutoria)?\s*(?:N(?:ro\.?)?(?:\.\s*[°ºo]?|[°º]|o\.?)?\s*)?\d{1,6}\s*(?:\/|de)\s*\d{2,4}\b/gi, tag: 'Sentencia sin tribunal', kind: 'fallo' },
