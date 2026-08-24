@@ -9,7 +9,9 @@ v12: hardening de scraping - timeouts explícitos, try/except granulares,
 """
 
 from flask import Flask, request, jsonify, send_from_directory
-import re, os, uuid, threading, queue, time, unicodedata
+import re, os, uuid, threading, queue, time, unicodedata, html, subprocess
+from concurrent.futures import ThreadPoolExecutor
+from urllib.parse import parse_qs, quote_plus, unquote, urlencode, urlparse
 import httpx
 from bs4 import BeautifulSoup
 from citations import extraer_citas
@@ -18,7 +20,7 @@ app = Flask(__name__, static_folder='public')
 PORT = int(os.environ.get('PORT', 3737))
 
 BJN_SIMPLE = 'https://bjn.poderjudicial.gub.uy/BJNPUBLICA/busquedaSimple.seam'
-IMPO_BASE = 'https://www.impo.com.uy/bases'
+IMPO_BASE = 'https://impo.com.uy/bases'
 IMPO_TIPO_PATH = {'ley': 'leyes', 'decreto': 'decretos', 'decreto_ley': 'decretos-ley'}
 
 # ─── Job store ────────────────────────────────────────────────────────────────
@@ -144,9 +146,19 @@ def _playwright_worker():
         ordenar       = data.get('ordenar', 'RELEVANCIA')
         sinonimos     = bool(data.get('sinonimos', False))
 
-        # Navegar al buscador con timeout generoso para cold start
-        page.goto(BJN_SIMPLE, wait_until='domcontentloaded', timeout=40000)
-        page.wait_for_selector('#formBusqueda\\:cajaQuery', timeout=15000)
+        # La verificación usa un timeout menor para que una cita no localizada no bloquee todo el job.
+        verify_mode = bool(data.get('_verificacion_bjn'))
+        navigation_timeout = 25000 if verify_mode else 40000
+        try:
+            page.goto(BJN_SIMPLE, wait_until='domcontentloaded', timeout=navigation_timeout)
+        except PWTimeout:
+            page.goto(BJN_SIMPLE, wait_until='commit', timeout=15000)
+        selector_timeout = 18000 if verify_mode else 15000
+        try:
+            page.wait_for_selector('#formBusqueda\\:cajaQuery', timeout=selector_timeout)
+        except PWTimeout:
+            page.goto(BJN_SIMPLE, wait_until='domcontentloaded', timeout=25000 if verify_mode else 40000)
+            page.wait_for_selector('#formBusqueda\\:cajaQuery', timeout=selector_timeout)
 
         if texto:
             page.fill('#formBusqueda\\:cajaQuery', texto)
@@ -178,7 +190,7 @@ def _playwright_worker():
             pass
 
         page.click('#formBusqueda\\:Search')
-        wait_results()
+        wait_results(15000 if verify_mode else 25000)
 
         raw        = page.evaluate(EXTRACT_JS)
         pagination = page.evaluate(PAGINATION_JS)
@@ -264,28 +276,78 @@ def _playwright_worker():
 
         return {'titulo': titulo, 'detalle': detalle_text, 'popup_url': popup_url}
 
-    def verificar_jurisprudencia(cita):
-        """Busca la cita de jurisprudencia en el BJN real y confirma si existe."""
-        query = f"{cita['numero']}/{cita['anio']}"
-        try:
-            raw, _ = do_search({'texto': query, 'tipoBusqueda': 'FRASE_EXACTA', 'ordenar': 'RELEVANCIA'})
-        except Exception as e:
-            return {**cita, 'fuente': 'BJN', 'estado': 'no_verificable',
-                    'detalle': f'No se pudo consultar el BJN: {e}', 'url': None}
+    BJN_VERIFY_MAX_PAGES = int(os.environ.get('BJN_VERIFY_MAX_PAGES', '3'))
+
+    def _bjn_query_variants(cita):
+        """Construye consultas canónicas sin perder el identificador original."""
+        numero = str(cita.get('numero') or '').strip()
+        anio = str(cita.get('anio') or '').strip()
+        base = f'{numero}/{anio}'
+        variantes = [base]
+        if '-' in numero:
+            partes = numero.split('-')
+            padded = '-'.join(
+                parte.zfill(4 if indice == 0 else 6)
+                for indice, parte in enumerate(partes)
+            )
+            variantes.append(f'{padded}/{anio}')
+        prefijo = str(cita.get('prefijo') or '').strip()
+        if prefijo and prefijo not in {'SENTENCIA', 'FALLO'}:
+            variantes.append(f'{prefijo} {base}')
+        return list(dict.fromkeys(variantes))
+
+    def _bjn_result_matches(cita, resultado):
         objetivo = _normalizar_identificador(f"{cita['numero']}/{cita['anio']}")
-        coincidencia = next(
-            (
-                r for r in process_raw_results(raw)
-                if objetivo in _normalizar_identificador(r.get('titulo', ''))
-                or _normalizar_identificador(r.get('numero', '')) == objetivo
-            ),
-            None,
-        )
+        titulo = resultado.get('titulo', '')
+        if not (objetivo in _normalizar_identificador(titulo)
+                or _normalizar_identificador(resultado.get('numero', '')) == objetivo):
+            return False
+        # El BJN no siempre incluye el acrónimo del tribunal en el título indexado.
+        # El número/año es la coincidencia verificable; el prefijo original se conserva.
+        return True
+
+    def _buscar_bjn_identificador(cita):
+        """Busca en las primeras páginas y devuelve la primera coincidencia exacta."""
+        for query in _bjn_query_variants(cita):
+            raw, pagination = do_search({
+                'texto': query,
+                'tipoBusqueda': 'FRASE_EXACTA',
+                'ordenar': 'RELEVANCIA',
+                '_verificacion_bjn': True,
+            })
+            for page_number in range(BJN_VERIFY_MAX_PAGES + 1):
+                coincidencia = next(
+                    (
+                        resultado for resultado in process_raw_results(raw)
+                        if _bjn_result_matches(cita, resultado)
+                    ),
+                    None,
+                )
+                if coincidencia:
+                    return coincidencia, query
+                if not pagination.get('hasNext') or page_number >= BJN_VERIFY_MAX_PAGES:
+                    break
+                raw, pagination = do_pagina('next')
+        return None, None
+
+    def verificar_jurisprudencia(cita):
+        """Busca la sentencia por identificador canónico y revisa páginas adicionales."""
+        if not cita.get('anio') or not cita.get('numero'):
+            return {**cita, 'fuente': 'BJN', 'estado': 'no_verificable',
+                    'detalle': 'La referencia no contiene número y año suficientes para consultar el BJN.',
+                    'url': BJN_SIMPLE}
+        try:
+            coincidencia, query = _buscar_bjn_identificador(cita)
+        except Exception as exc:
+            return {**cita, 'fuente': 'BJN', 'estado': 'no_verificable',
+                    'detalle': f'No se pudo consultar el BJN: {exc}', 'url': BJN_SIMPLE}
         if coincidencia:
             return {**cita, 'fuente': 'BJN', 'estado': 'verificada',
-                    'detalle': coincidencia.get('titulo', ''), 'url': BJN_SIMPLE}
+                    'detalle': coincidencia.get('titulo', ''), 'url': BJN_SIMPLE,
+                    'consulta_bjn': query}
         return {**cita, 'fuente': 'BJN', 'estado': 'no_encontrada',
-                'detalle': 'No se encontró una sentencia con ese número en el BJN.', 'url': None}
+                'detalle': 'No se encontró una sentencia con ese identificador en las páginas consultadas del BJN.',
+                'url': BJN_SIMPLE}
 
     def do_verificar(texto):
         citas = extraer_citas(texto)
@@ -364,30 +426,267 @@ def _normalizar_identificador(value: str) -> str:
     return re.sub(r'[^a-z0-9]', '', normalized.lower())
 
 
-def verificar_impo(cita: dict) -> dict:
-    """Consulta IMPO por una ley/decreto. Ante error o dato faltante, nunca marca
-    'no_encontrada' — usa 'no_verificable' para no dar un falso negativo."""
-    tipo_path = IMPO_TIPO_PATH.get(cita['tipo'])
-    if not cita.get('anio'):
-        return {**cita, 'fuente': 'IMPO', 'estado': 'no_verificable',
-                'detalle': 'No se pudo determinar el año de la norma en el texto citado.',
-                'url': None}
+_IMPO_RESOLVE_CACHE = {}
+_IMPO_RESOLVE_CACHE_TTL = int(os.environ.get('IMPO_RESOLVE_CACHE_TTL', '21600'))
+_IMPO_RESOLVE_LOCK = threading.Lock()
+_IMPO_RESOLVE_CHUNK = 18
+_IMPO_MIN_YEAR = 1830
+_IMPO_MAX_YEAR = time.gmtime().tm_year
 
-    url = f"{IMPO_BASE}/{tipo_path}/{cita['numero']}-{cita['anio']}"
+
+def _impo_years_to_try(numero: str) -> list[int]:
+    """Ordena los años probables por la numeración histórica de las leyes uruguayas."""
+    digits = re.sub(r'\D', '', str(numero or ''))
     try:
-        r = httpx.get(url, params={'json': 'true'}, timeout=10, follow_redirects=True)
-    except httpx.HTTPError as e:
-        return {**cita, 'fuente': 'IMPO', 'estado': 'no_verificable',
-                'detalle': f'No se pudo consultar IMPO: {e}', 'url': url}
+        value = int(digits)
+    except ValueError:
+        value = 0
+    if value >= 18000:
+        inicio = 1995
+    elif value >= 16000:
+        inicio = 1980
+    elif value >= 14000:
+        inicio = 1965
+    elif value >= 12000:
+        inicio = 1945
+    elif value >= 10000:
+        inicio = 1925
+    elif value >= 8000:
+        inicio = 1905
+    else:
+        inicio = _IMPO_MIN_YEAR
+    primarios = list(range(_IMPO_MAX_YEAR, max(_IMPO_MIN_YEAR, inicio) - 1, -1))
+    secundarios = list(range(min(_IMPO_MAX_YEAR, inicio - 1), _IMPO_MIN_YEAR - 1, -1))
+    return primarios + secundarios
 
-    if r.status_code == 404:
+
+def _impo_path(cita: dict, anio: str) -> str:
+    tipo_path = IMPO_TIPO_PATH.get(cita['tipo'])
+    return f"{IMPO_BASE}/{tipo_path}/{cita['numero']}-{anio}"
+
+
+def _impo_content_matches(content: str, cita: dict) -> bool:
+    """Comprueba el título y el número para no confundir la pantalla de ingreso con una norma."""
+    content = content[:12000]
+    if re.search(r'<title[^>]*>\s*(?:Ingreso|Página no encontrada)', content, re.IGNORECASE):
+        return False
+    number = re.sub(r'[^0-9]', '', str(cita.get('numero') or ''))
+    compact = re.sub(r'[^a-z0-9]', '', content.lower())
+    if not number or number not in compact:
+        return False
+    if cita.get('tipo') == 'ley':
+        return bool(re.search(r'\bley\b', content, re.IGNORECASE))
+    if cita.get('tipo') == 'decreto_ley':
+        return bool(re.search(r'decreto[\s-]*ley', content, re.IGNORECASE))
+    return bool(re.search(r'\bdecreto\b', content, re.IGNORECASE))
+
+
+def _impo_page_matches(response: httpx.Response, cita: dict) -> bool:
+    return response.status_code == 200 and _impo_content_matches(response.text, cita)
+
+
+def _impo_search_queries(cita: dict) -> list[str]:
+    tipo = cita.get('tipo')
+    numero = cita.get('numero', '')
+    if tipo == 'ley':
+        return [
+            f'site:impo.com.uy/bases/leyes {numero}',
+            f'site:impo.com.uy/bases/leyes "Ley N° {numero}"',
+        ]
+    if tipo == 'decreto_ley':
+        return [
+            f'site:impo.com.uy/bases/decretos-ley {numero}',
+            f'site:impo.com.uy/bases/decretos-ley "Decreto-Ley N° {numero}"',
+        ]
+    return [
+        f'site:impo.com.uy/bases/decretos {numero}',
+        f'site:impo.com.uy/bases/decretos "Decreto N° {numero}"',
+        f'site:impo.com.uy/bases/decretos {numero}/',
+        f'site:impo.com.uy/bases/decretos "Decreto N° {numero}/"',
+        f'site:impo.com.uy/bases/decretos "Decreto {numero}/"',
+    ]
+
+
+def _curl_get(url: str, timeout: int = 20):
+    """Obtiene una URL con curl y devuelve un Response compatible con httpx."""
+    marker = b'\n__BJN_STATUS__'
+    try:
+        completed = subprocess.run(
+            [
+                'curl', '-4', '-LsS', '--retry', '2', '--retry-all-errors', '--retry-delay', '1',
+                '--max-time', str(timeout), '--connect-timeout', '8',
+                '-A', 'BJN-Buscador/1.0', '-w', '\n__BJN_STATUS__%{http_code}', url,
+            ],
+            capture_output=True,
+            timeout=timeout + 3,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    body, separator, status_text = completed.stdout.rpartition(marker)
+    if not separator:
+        return None
+    try:
+        status = int(status_text.decode('ascii', errors='ignore').strip())
+    except ValueError:
+        return None
+    return httpx.Response(status, content=body, request=httpx.Request('GET', url))
+
+
+def _impo_search_links(cita: dict) -> list[dict]:
+    """Lee el RSS público de Bing y devuelve solo URLs canónicas de IMPO."""
+    path_prefix = {
+        'ley': '/bases/leyes/',
+        'decreto': '/bases/decretos/',
+        'decreto_ley': '/bases/decretos-ley/',
+    }.get(cita.get('tipo'), '')
+    number = re.sub(r'\D', '', str(cita.get('numero') or ''))
+    links = []
+    for search_query in _impo_search_queries(cita):
+        query = quote_plus(search_query)
+        endpoints = [
+            f'https://www.bing.com/search?format=rss&q={query}',
+            f'https://www.bing.com/search?q={query}',
+        ]
+        for endpoint in endpoints:
+            response = _curl_get(endpoint, timeout=20)
+            if response is None or response.status_code != 200:
+                continue
+            raw_links = re.findall(r'<link>(https?://[^<]+)</link>', response.text, re.IGNORECASE)
+            raw_links.extend(re.findall(r'href=["\'](https?://[^"\']+)["\']', response.text, re.IGNORECASE))
+            for raw_link in raw_links:
+                candidate = html.unescape(raw_link)
+                parsed = urlparse(candidate)
+                if parsed.netloc.lower() not in {'www.impo.com.uy', 'impo.com.uy'}:
+                    continue
+                match = re.match(re.escape(path_prefix) + r'(\d+)-(\d{4})$', parsed.path)
+                if not match or match.group(1) != number:
+                    continue
+                item = {'anio': match.group(2), 'url': f'https://www.impo.com.uy{parsed.path}'}
+                if item not in links:
+                    links.append(item)
+            if links:
+                break
+        if links:
+            break
+    return links
+
+
+def _impo_request(url: str, params: dict, timeout: httpx.Timeout):
+    """Consulta IMPO con curl y prueba HTTPX como respaldo."""
+    query = urlencode(params or {})
+    candidatos = [url, url.replace('https://www.impo.com.uy', 'https://impo.com.uy')]
+    for candidato in dict.fromkeys(candidatos):
+        target = f'{candidato}?{query}' if query else candidato
+        response = _curl_get(target, timeout=20)
+        if response is not None and response.status_code == 200:
+            return response
+    for candidato in dict.fromkeys(candidatos):
+        try:
+            return httpx.get(
+                candidato,
+                params=params,
+                timeout=timeout,
+                follow_redirects=True,
+                headers={'User-Agent': 'BJN-Buscador/1.0'},
+            )
+        except httpx.HTTPError:
+            continue
+    return None
+
+
+def _impo_get_candidate(cita: dict, anio: int):
+    url = _impo_path(cita, str(anio))
+    response = _impo_request(
+        url,
+        params={'json': 'true'},
+        timeout=httpx.Timeout(8.0, connect=4.0),
+    )
+    if response is not None and _impo_page_matches(response, cita):
+        return {'anio': str(anio), 'url': url}
+    return None
+
+
+def _resolver_impo_por_numero(cita: dict) -> list[dict]:
+    """Resuelve el año de una norma sin año mediante páginas públicas de IMPO.
+
+    La búsqueda se hace en bloques recientes y se detiene en el primer bloque que
+    contenga coincidencias. La respuesta solo se considera positiva si la página
+    devuelve el tipo y el número de la norma, no solo un HTTP 200.
+    """
+    cache_key = (cita.get('tipo'), cita.get('numero'))
+    now = time.monotonic()
+    with _IMPO_RESOLVE_LOCK:
+        cached = _IMPO_RESOLVE_CACHE.get(cache_key)
+        if cached and now - cached['at'] < _IMPO_RESOLVE_CACHE_TTL:
+            return list(cached['matches'])
+
+    matches = _impo_search_links(cita)
+    if matches:
+        with _IMPO_RESOLVE_LOCK:
+            _IMPO_RESOLVE_CACHE[cache_key] = {'at': time.monotonic(), 'matches': list(matches)}
+        return matches
+
+    years = _impo_years_to_try(cita.get('numero'))
+    matches = []
+    for start in range(0, len(years), _IMPO_RESOLVE_CHUNK):
+        chunk = years[start:start + _IMPO_RESOLVE_CHUNK]
+        with ThreadPoolExecutor(max_workers=9) as executor:
+            futures = [executor.submit(_impo_get_candidate, cita, anio) for anio in chunk]
+            for future in futures:
+                match = future.result()
+                if match:
+                    matches.append(match)
+        if matches:
+            break
+
+    with _IMPO_RESOLVE_LOCK:
+        _IMPO_RESOLVE_CACHE[cache_key] = {'at': time.monotonic(), 'matches': list(matches)}
+    return matches
+
+
+def verificar_impo(cita: dict) -> dict:
+    """Consulta IMPO y resuelve el año cuando la cita no lo trae."""
+    if cita.get('anio'):
+        url = _impo_path(cita, cita['anio'])
+        try:
+            response = _impo_request(
+                url,
+                params={'json': 'true'},
+                timeout=httpx.Timeout(10.0, connect=5.0),
+            )
+            if response is None:
+                raise httpx.ConnectError('No se pudo establecer conexión con IMPO')
+        except httpx.HTTPError as exc:
+            return {**cita, 'fuente': 'IMPO', 'estado': 'no_verificable',
+                    'detalle': f'No se pudo consultar IMPO: {exc}', 'url': url}
+        if _impo_page_matches(response, cita):
+            return {**cita, 'fuente': 'IMPO', 'estado': 'verificada',
+                    'detalle': 'Norma encontrada en IMPO.', 'url': url}
         return {**cita, 'fuente': 'IMPO', 'estado': 'no_encontrada',
                 'detalle': 'IMPO no tiene registrada una norma con ese número y año.', 'url': url}
-    if r.status_code != 200:
+
+    matches = _resolver_impo_por_numero(cita)
+    if len(matches) == 1 and cita.get('tipo') == 'decreto':
+        resolved = matches[0]
+        return {**cita, 'anio': resolved['anio'], 'fuente': 'IMPO',
+                'estado': 'no_verificable',
+                'detalle': f"Se localizó el Decreto {cita.get('numero')} en IMPO para {resolved['anio']}, pero falta el año en la cita y el número puede repetirse.",
+                'url': resolved['url']}
+    if len(matches) == 1:
+        resolved = matches[0]
+        return {**cita, 'anio': resolved['anio'], 'fuente': 'IMPO',
+                'estado': 'verificada',
+                'detalle': f"Norma encontrada en IMPO. Año resuelto por número: {resolved['anio']}.",
+                'url': resolved['url']}
+    if len(matches) > 1:
+        years = ', '.join(match['anio'] for match in matches)
         return {**cita, 'fuente': 'IMPO', 'estado': 'no_verificable',
-                'detalle': f'IMPO respondió con estado {r.status_code}.', 'url': url}
-    return {**cita, 'fuente': 'IMPO', 'estado': 'verificada',
-            'detalle': 'Norma encontrada en IMPO.', 'url': url}
+                'detalle': f'El número aparece en más de una norma de IMPO ({years}); falta el año en la cita.',
+                'url': matches[0]['url']}
+    return {**cita, 'fuente': 'IMPO', 'estado': 'no_encontrada',
+            'detalle': 'No se localizó una norma pública de IMPO con ese tipo y número.',
+            'url': None}
 
 
 # ─── Rutas ────────────────────────────────────────────────────────────────────
