@@ -17,10 +17,11 @@ Agregar a ~/.claude/settings.json:
 """
 
 import time
+import os
 import httpx
 from mcp.server.fastmcp import FastMCP
 
-BASE_URL = "https://bjn-buscador.onrender.com"
+BASE_URL = os.environ.get("BJN_BASE_URL", "https://bjn-buscador.onrender.com")
 
 mcp = FastMCP(
     "BJN Jurisprudencia",
@@ -36,11 +37,14 @@ TIPO_BUSQUEDA = {
     "todas": "TODAS_LAS_PALABRAS",
     "frase": "FRASE_EXACTA",
     "alguna": "ALGUNA_PALABRA",
+    "maximizar": "MAXIMIZAR_RESULTADOS",
 }
 
 ORDENAR = {
     "relevancia": "RELEVANCIA",
-    "fecha": "FECHA",
+    "fecha": "FECHA_DESCENDENTE",
+    "reciente": "FECHA_DESCENDENTE",
+    "antiguo": "FECHA_ASCENDENTE",
 }
 
 
@@ -77,6 +81,7 @@ def buscar_jurisprudencia(
     texto: str,
     modo: str = "todas",
     orden: str = "relevancia",
+    sinonimos: bool = False,
 ) -> str:
     """
     Busca sentencias en la Base de Jurisprudencia Nacional (BJN) de Uruguay.
@@ -84,7 +89,8 @@ def buscar_jurisprudencia(
     Args:
         texto: Palabras clave o frase a buscar en las sentencias.
         modo: Modo de busqueda - "todas" (todas las palabras), "frase" (frase exacta), "alguna" (alguna palabra).
-        orden: Orden de resultados - "relevancia" o "fecha".
+        orden: Orden de resultados - "relevancia", "reciente" o "antiguo".
+        sinonimos: habilita los sinónimos del BJN cuando es true.
 
     Returns:
         Lista de sentencias encontradas. Cada resultado incluye un 'index' para usar con obtener_detalle.
@@ -93,6 +99,7 @@ def buscar_jurisprudencia(
         "texto": texto,
         "tipoBusqueda": TIPO_BUSQUEDA.get(modo, "TODAS_LAS_PALABRAS"),
         "ordenar": ORDENAR.get(orden, "RELEVANCIA"),
+        "sinonimos": bool(sinonimos),
     }
     r = httpx.post(f"{BASE_URL}/api/buscar", json=payload, timeout=30)
     r.raise_for_status()

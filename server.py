@@ -9,7 +9,7 @@ v12: hardening de scraping - timeouts explícitos, try/except granulares,
 """
 
 from flask import Flask, request, jsonify, send_from_directory
-import re, os, uuid, threading, queue, time
+import re, os, uuid, threading, queue, time, unicodedata
 import httpx
 from bs4 import BeautifulSoup
 from citations import extraer_citas
@@ -22,14 +22,36 @@ IMPO_BASE = 'https://www.impo.com.uy/bases'
 IMPO_TIPO_PATH = {'ley': 'leyes', 'decreto': 'decretos', 'decreto_ley': 'decretos-ley'}
 
 # ─── Job store ────────────────────────────────────────────────────────────────
+JOB_TTL_SECONDS = int(os.environ.get('JOB_TTL_SECONDS', '300'))
 _jobs      = {}
 _jobs_lock = threading.Lock()
 
+
+def _purge_jobs():
+    """Elimina jobs vencidos para que una instancia de Render no crezca sin límite."""
+    now = time.monotonic()
+    with _jobs_lock:
+        expired = []
+        for jid, job in _jobs.items():
+            reference = job.get('completed_at') or job.get('created_at', now)
+            if now - reference > JOB_TTL_SECONDS:
+                expired.append(jid)
+        for jid in expired:
+            _jobs.pop(jid, None)
+
+
 def _new_job():
+    _purge_jobs()
     jid = str(uuid.uuid4())
     with _jobs_lock:
-        _jobs[jid] = {'status': 'pending', 'result': None, 'error': None}
+        _jobs[jid] = {
+            'status': 'pending',
+            'result': None,
+            'error': None,
+            'created_at': time.monotonic(),
+        }
     return jid
+
 
 def _finish_job(jid, result=None, error=None):
     with _jobs_lock:
@@ -37,6 +59,7 @@ def _finish_job(jid, result=None, error=None):
             _jobs[jid]['status'] = 'done' if result is not None else 'error'
             _jobs[jid]['result'] = result
             _jobs[jid]['error']  = error
+            _jobs[jid]['completed_at'] = time.monotonic()
 
 # ─── Worker thread dedicado para Playwright ───────────────────────────────────
 _task_queue = queue.Queue()
@@ -44,17 +67,36 @@ _task_queue = queue.Queue()
 _state = {
     'page': None,
     'ctx':  None,
+    'ready': False,
+    'error': None,
 }
+_state_lock = threading.Lock()
 
 def _playwright_worker():
     from playwright.sync_api import sync_playwright, TimeoutError as PWTimeout
 
-    pw      = sync_playwright().start()
-    browser = pw.chromium.launch(headless=True)
-    ctx     = browser.new_context(locale='es-UY')
-    page    = ctx.new_page()
-    _state['page'] = page
-    _state['ctx']  = ctx
+    try:
+        pw      = sync_playwright().start()
+        browser = pw.chromium.launch(headless=True)
+        ctx     = browser.new_context(locale='es-UY')
+        page    = ctx.new_page()
+    except Exception as exc:
+        message = f'No se pudo iniciar el motor de consulta: {exc}'
+        with _state_lock:
+            _state['ready'] = False
+            _state['error'] = message
+        # Completar como error las tareas que hayan llegado mientras iniciaba.
+        while True:
+            task = _task_queue.get()
+            if task is None:
+                return
+            _finish_job(task.get('jid'), error=message)
+
+    with _state_lock:
+        _state['page'] = page
+        _state['ctx']  = ctx
+        _state['ready'] = True
+        _state['error'] = None
 
     # ── JavaScript helpers ────────────────────────────────────────────────────
 
@@ -69,7 +111,7 @@ def _playwright_worker():
         });
     }"""
 
-    PAGINATION_JS = """() => {
+    PAGINATION_JS = r"""() => {
         const all     = Array.from(document.querySelectorAll('a, input[type="submit"], input[type="button"]'));
         const nextEl  = all.find(el => /^(siguiente|>>|>)$/i.test((el.textContent || el.value || '').trim()));
         const prevEl  = all.find(el => /^(anterior|<<|<)$/i.test((el.textContent || el.value || '').trim()));
@@ -100,6 +142,7 @@ def _playwright_worker():
         texto         = data.get('texto', '').strip()
         tipo_busqueda = data.get('tipoBusqueda', 'TODAS_LAS_PALABRAS')
         ordenar       = data.get('ordenar', 'RELEVANCIA')
+        sinonimos     = bool(data.get('sinonimos', False))
 
         # Navegar al buscador con timeout generoso para cold start
         page.goto(BJN_SIMPLE, wait_until='domcontentloaded', timeout=40000)
@@ -124,6 +167,13 @@ def _playwright_worker():
 
         try:
             page.select_option('select[name="formBusqueda:j_id52:j_id56"]', ordenar)
+        except Exception:
+            pass
+
+        # El selector oficial de sinónimos aparece dentro de las opciones avanzadas.
+        try:
+            page.locator('#formBusqueda\\:decSinonimos\\:chkSinonimos').set_checked(
+                sinonimos, timeout=5000)
         except Exception:
             pass
 
@@ -222,9 +272,13 @@ def _playwright_worker():
         except Exception as e:
             return {**cita, 'fuente': 'BJN', 'estado': 'no_verificable',
                     'detalle': f'No se pudo consultar el BJN: {e}', 'url': None}
+        objetivo = _normalizar_identificador(f"{cita['numero']}/{cita['anio']}")
         coincidencia = next(
-            (r for r in process_raw_results(raw)
-             if r.get('numero', '').replace('.', '') == cita['numero']),
+            (
+                r for r in process_raw_results(raw)
+                if objetivo in _normalizar_identificador(r.get('titulo', ''))
+                or _normalizar_identificador(r.get('numero', '')) == objetivo
+            ),
             None,
         )
         if coincidencia:
@@ -282,14 +336,32 @@ def _playwright_worker():
 # ─── Helpers de resultados ────────────────────────────────────────────────────
 
 def parse_title(titulo: str) -> dict:
-    m = re.match(r'^(\d[\d.]*\/\d+)\s+(\w+)\s+-\s+(.+?)\s+-\s+(.+)$', titulo)
+    """Descompone títulos numéricos y títulos SEF conservando el identificador completo."""
+    m = re.match(
+        r'^(?P<numero>(?:(?:SEF|DFA|IUE)\s+)?'
+        r'(?:\d[\d.-]*|[A-Z][A-Z0-9-]*)/\d{4})\s+'
+        r'(?P<tipo>DEFINITIVA|INTERLOCUTORIA)\s+-\s+(?P<resto>.+)$',
+        titulo or '', re.IGNORECASE,
+    )
     if m:
-        return {'numero': m.group(1), 'tipo': m.group(2),
-                'tribunal': m.group(3).strip(), 'proceso': m.group(4).strip()}
+        tribunal, sep, proceso = m.group('resto').partition(' - ')
+        return {
+            'numero': m.group('numero').strip(),
+            'tipo': m.group('tipo').strip(),
+            'tribunal': tribunal.strip(),
+            'proceso': proceso.strip() if sep else '',
+        }
     return {'numero': '', 'tipo': '', 'tribunal': '', 'proceso': titulo}
 
 def process_raw_results(raw: list) -> list:
     return [{**r, **parse_title(r['titulo'])} for r in raw]
+
+
+def _normalizar_identificador(value: str) -> str:
+    """Normaliza identificadores para comparar citas sin depender de puntos o guiones."""
+    normalized = unicodedata.normalize('NFKD', value or '')
+    normalized = ''.join(ch for ch in normalized if not unicodedata.combining(ch))
+    return re.sub(r'[^a-z0-9]', '', normalized.lower())
 
 
 def verificar_impo(cita: dict) -> dict:
@@ -330,6 +402,7 @@ def verificador_page():
 
 @app.route('/api/job/<jid>', methods=['GET'])
 def get_job(jid):
+    _purge_jobs()
     with _jobs_lock:
         job = _jobs.get(jid)
     if not job:
@@ -363,13 +436,20 @@ def buscar():
 def pagina():
     data      = request.get_json() or {}
     direction = data.get('direction', 'next')
+    if direction not in ('next', 'prev'):
+        return jsonify({'error': "La dirección debe ser 'next' o 'prev'."}), 400
     jid = _submit_job({'type': 'pagina', 'direction': direction})
     return jsonify({'job_id': jid})
 
 @app.route('/api/detalle', methods=['POST'])
 def detalle():
-    data  = request.get_json() or {}
-    index = int(data.get('index', 0))
+    data = request.get_json() or {}
+    try:
+        index = int(data.get('index', 0))
+    except (TypeError, ValueError):
+        return jsonify({'error': 'El índice de la sentencia no es válido.'}), 400
+    if index < 0:
+        return jsonify({'error': 'El índice de la sentencia no es válido.'}), 400
     jid = _submit_job({'type': 'detalle', 'index': index})
     return jsonify({'job_id': jid})
 
@@ -382,21 +462,21 @@ def verificar():
     jid = _submit_job({'type': 'verificar', 'texto': texto})
     return jsonify({'job_id': jid})
 
+@app.route('/healthz', methods=['GET'])
+def healthz():
+    """Health check del proceso; incluye la disponibilidad del worker de Playwright."""
+    with _state_lock:
+        ready = _state['ready']
+        error = _state['error']
+    return jsonify({'ok': True, 'worker_ready': ready, 'worker_error': error})
+
+
 @app.route('/api/status', methods=['GET'])
 def status():
-    jid = _new_job()
-    _task_queue.put({'type': 'status', 'jid': jid})
-    for _ in range(15):
-        time.sleep(0.2)
-        with _jobs_lock:
-            job = _jobs.get(jid, {})
-        if job.get('status') != 'pending':
-            with _jobs_lock:
-                _jobs.pop(jid, None)
-            return jsonify({'ok': job.get('status') == 'done'})
-    with _jobs_lock:
-        _jobs.pop(jid, None)
-    return jsonify({'ok': False})
+    with _state_lock:
+        ready = _state['ready']
+        error = _state['error']
+    return jsonify({'ok': ready, 'worker_ready': ready, 'error': error})
 
 
 # ─── MCP Server (Streamable HTTP) ─────────────────────────────────────────────
@@ -421,8 +501,18 @@ _mcp = _FastMCP(
 
 _LOCAL = f'http://127.0.0.1:{PORT}'
 
-_TIPO_MAP = {'todas': 'TODAS_LAS_PALABRAS', 'frase': 'FRASE_EXACTA', 'alguna': 'ALGUNA_PALABRA'}
-_ORDEN_MAP = {'relevancia': 'RELEVANCIA', 'fecha': 'FECHA'}
+_TIPO_MAP = {
+    'todas': 'TODAS_LAS_PALABRAS',
+    'frase': 'FRASE_EXACTA',
+    'alguna': 'ALGUNA_PALABRA',
+    'maximizar': 'MAXIMIZAR_RESULTADOS',
+}
+_ORDEN_MAP = {
+    'relevancia': 'RELEVANCIA',
+    'fecha': 'FECHA_DESCENDENTE',
+    'fecha_descendente': 'FECHA_DESCENDENTE',
+    'fecha_ascendente': 'FECHA_ASCENDENTE',
+}
 
 
 def _poll_local(job_id: str, timeout: int = 90) -> dict:
@@ -449,14 +539,15 @@ def _fmt(results: list) -> str:
 
 
 @_mcp.tool()
-def buscar_jurisprudencia(texto: str, modo: str = 'todas', orden: str = 'relevancia') -> str:
+def buscar_jurisprudencia(texto: str, modo: str = 'todas', orden: str = 'relevancia', sinonimos: bool = False) -> str:
     """
     Busca sentencias en la Base de Jurisprudencia Nacional (BJN) de Uruguay.
 
     Args:
         texto: Palabras clave o frase a buscar.
         modo: 'todas' (todas las palabras), 'frase' (frase exacta) o 'alguna' (alguna palabra).
-        orden: 'relevancia' o 'fecha'.
+        orden: 'relevancia', 'fecha', 'fecha_descendente' o 'fecha_ascendente'.
+        sinonimos: si es true, habilita los sinónimos del BJN.
 
     Returns:
         Lista de sentencias con su index, número, tribunal y extracto.
@@ -465,6 +556,7 @@ def buscar_jurisprudencia(texto: str, modo: str = 'todas', orden: str = 'relevan
         'texto': texto,
         'tipoBusqueda': _TIPO_MAP.get(modo, 'TODAS_LAS_PALABRAS'),
         'ordenar': _ORDEN_MAP.get(orden, 'RELEVANCIA'),
+        'sinonimos': bool(sinonimos),
     }
     r = _httpx.post(f'{_LOCAL}/api/buscar', json=payload, timeout=30)
     r.raise_for_status()

@@ -5,7 +5,7 @@ Sin I/O: solo regex + normalización. Usado por server.py para el verificador de
 
 import re
 
-_NUM_ORD = r'N[°ºo]\.?\s*'
+_NUM_ORD = r'N\s*(?:[°ºo]|[.]\s*[°º])\.?\s*'
 
 # "Ley 19.355", "Ley Nº 18331", opcionalmente con año pegado "Ley 19.355/2015"
 # (el plural de "ley" es "leyes", no "leys" — por eso "Ley(?:es)?" y no "Leyes?")
@@ -28,7 +28,8 @@ DECRETO_RE = re.compile(
 
 # "Sentencia Nº 123/2020", "SEF 45/2021", "IUE 123-45/2020", "Fallo 1.234/2019"
 JURISPRUDENCIA_RE = re.compile(
-    rf'\b(?:Sentencia|SEF|IUE|Fallo)s?\s*(?:{_NUM_ORD})?(\d{{1,4}}(?:\.\d{{3}})?)\s*/\s*(\d{{4}})',
+    rf'\b(?:Sentencia|SEF|IUE|Fallo)s?[\s-]*(?:{_NUM_ORD})?'
+    rf'(\d{{1,4}}(?:[.-]\d{{1,6}})*)\s*/\s*(\d{{4}})',
     re.IGNORECASE,
 )
 
