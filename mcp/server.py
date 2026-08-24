@@ -11,7 +11,7 @@ from mcp.server.fastmcp import FastMCP
 
 mcp = FastMCP("BJN - Jurisprudencia Uruguay")
 
-BASE_URL = "https://bjn-buscador.onrender.com"
+BASE_URL = os.environ.get("BJN_BASE_URL", "https://bjn-buscador.onrender.com")
 POLL_INTERVAL = 3
 MAX_POLLS = 30
 
@@ -29,6 +29,7 @@ SERVER_CARD = {
                     "tipo_busqueda": {"type": "string", "enum": ["todas", "exacta", "alguna", "maximizar"], "default": "todas"},
                     "tipo_sentencia": {"type": "string", "enum": ["", "DEFINITIVA", "INTERLOCUTORIA"], "default": ""},
                     "orden": {"type": "string", "enum": ["relevancia", "reciente", "antiguo"], "default": "relevancia"},
+                    "sinonimos": {"type": "boolean", "description": "Habilita los sinónimos del BJN", "default": False},
                 },
                 "required": ["texto"],
             },
@@ -77,6 +78,7 @@ async def buscar_sentencias(
     tipo_busqueda: str = "todas",
     tipo_sentencia: str = "",
     orden: str = "relevancia",
+    sinonimos: bool = False,
 ) -> str:
     """
     Busca sentencias judiciales en la Base de Jurisprudencia Nacional (BJN) de Uruguay.
@@ -86,11 +88,29 @@ async def buscar_sentencias(
         tipo_busqueda: "todas" | "exacta" | "alguna" | "maximizar"
         tipo_sentencia: "" (todas) | "DEFINITIVA" | "INTERLOCUTORIA"
         orden: "relevancia" | "reciente" | "antiguo"
+        sinonimos: habilita los sinónimos del BJN cuando es true.
 
     Returns:
         Lista de sentencias con número, tipo, tribunal y extracto.
     """
-    payload = {"texto": texto, "tipo": tipo_busqueda, "sentencia": tipo_sentencia, "orden": orden}
+    tipo_map = {
+        "todas": "TODAS_LAS_PALABRAS",
+        "exacta": "FRASE_EXACTA",
+        "alguna": "ALGUNA_PALABRA",
+        "maximizar": "MAXIMIZAR_RESULTADOS",
+    }
+    orden_map = {
+        "relevancia": "RELEVANCIA",
+        "reciente": "FECHA_DESCENDENTE",
+        "antiguo": "FECHA_ASCENDENTE",
+    }
+    payload = {
+        "texto": texto,
+        "tipoBusqueda": tipo_map.get(tipo_busqueda, "TODAS_LAS_PALABRAS"),
+        "tipoSentencia": tipo_sentencia,
+        "ordenar": orden_map.get(orden, "RELEVANCIA"),
+        "sinonimos": bool(sinonimos),
+    }
 
     async with httpx.AsyncClient(timeout=120) as client:
         resp = await client.post(f"{BASE_URL}/api/buscar", json=payload)
