@@ -870,19 +870,31 @@
   var ocrWorker = null;
   var ocrRun = 0;
   var OCR_MAX_PAGES = 40;
-  var OCR_RENDER_SCALE = 1.35;
+  // Las páginas escaneadas del BJN suelen venir en baja resolución. Una escala
+  // moderada reduce mucho el tiempo y la memoria sin perder el cuerpo del texto.
+  // El archivo adjunto contiene imágenes de 347 x 491 px. La escala 1.0
+  // conserva suficiente detalle sin hacer pesado el procesamiento móvil.
+  var OCR_RENDER_SCALE = 1.0;
+
+  var ocrPageProgress = null;
 
   function reportOcrProgress(info) {
     if (!info || !info.status) return;
     var progress = typeof info.progress === 'number' ? Math.round(info.progress * 100) : null;
     var suffix = progress == null ? '' : ' ' + progress + '%';
-    setFileStatus('Preparando OCR en español: ' + info.status + suffix + '…');
+    var pagePrefix = ocrPageProgress ? 'Página ' + ocrPageProgress.page + ' de ' + ocrPageProgress.total + ': ' : '';
+    setFileStatus(pagePrefix + 'OCR en español: ' + info.status + suffix + '…');
   }
 
   function normalizeOcrText(text) {
     return String(text || '')
       .replace(/\bN\s*[\*º°oO](?=\s|\d)/g, 'N°')
-      .replace(/\bN\s*[º°](?=\s|\d)/g, 'N°');
+      .replace(/\bN\s*[º°](?=\s|\d)/g, 'N°')
+      .replace(/\bECLEES[-\s]*([A-Z]{2,8})\s*[:\-]?\s*(\d{4})\s*[:\-]\s*(\d{1,8})\b/gi, 'ECLI:ES:$1:$2:$3')
+      .replace(/\bECL[EI]S?\s*[:\-]\s*/gi, 'ECLI:ES:')
+      .replace(/\bECLI:ES:ES:([A-Z0-9]{1,10}):((?:19|20)\d{2}):([A-Z0-9-]+)\b/gi, 'ECLI:ES:$1:$2:$3')
+      .replace(/\b(?:A[J1]|A\])\s+(?=(?:SAN|STS|STSJ|SAP|ATS|AAN)\b)/gi, 'Roj ')
+      .replace(/\bRoj\s*[:\-]?\s*/gi, 'Roj ');
   }
 
   async function getOcrWorker() {
@@ -891,34 +903,63 @@
     }
     if (!ocrWorker) {
       ocrWorker = await window.Tesseract.createWorker('spa', 1, { logger: reportOcrProgress });
+      if (typeof ocrWorker.setParameters === 'function') {
+        await ocrWorker.setParameters({ tessedit_pageseg_mode: '6', preserve_interword_spaces: '1' });
+      }
     }
     return ocrWorker;
+  }
+
+  function prepareOcrContext(context) {
+    // El filtro se aplica durante el render de PDF.js y evita copiar millones
+    // de píxeles con getImageData en cada página del teléfono.
+    try {
+      context.filter = 'grayscale(1) contrast(1.25)';
+    } catch (err) {
+      // Algunos navegadores antiguos no exponen CanvasRenderingContext2D.filter.
+    }
+    return context;
   }
 
   async function ocrPdf(doc, file, run) {
     var worker = await getOcrWorker();
     var pageCount = Math.min(doc.numPages, OCR_MAX_PAGES);
     var ocrPages = [];
-    for (var pageNum = 1; pageNum <= pageCount; pageNum++) {
+    try {
+      for (var pageNum = 1; pageNum <= pageCount; pageNum++) {
+        if (run !== ocrRun) throw new DOMException('Cancelado', 'AbortError');
+        setFileStatus('OCR local: preparando página ' + pageNum + ' de ' + pageCount + ' de ' + file.name + '…');
+        var page = await doc.getPage(pageNum);
+        var viewport = page.getViewport({ scale: OCR_RENDER_SCALE });
+        var canvas = document.createElement('canvas');
+        canvas.width = Math.ceil(viewport.width);
+        canvas.height = Math.ceil(viewport.height);
+        var context = prepareOcrContext(canvas.getContext('2d', { alpha: false }));
+        await page.render({ canvasContext: context, viewport: viewport }).promise;
+        ocrPageProgress = { page: pageNum, total: pageCount };
+        var result = await worker.recognize(canvas);
+        ocrPages.push(result && result.data && result.data.text ? result.data.text : '');
+        ocrPageProgress = null;
+        if (typeof page.cleanup === 'function') page.cleanup();
+        context = null;
+        canvas.width = 1;
+        canvas.height = 1;
+        // Mostrar lo ya reconocido evita que el usuario vea un formulario vacío
+        // durante varios minutos en sentencias escaneadas extensas.
+        setLoadedText(normalizeOcrText(ocrPages.join('\n\n')), 'OCR en curso: ' + file.name + ' (página ' + pageNum + ' de ' + pageCount + ')');
+      }
+      ocrPageProgress = null;
       if (run !== ocrRun) throw new DOMException('Cancelado', 'AbortError');
-      setFileStatus('OCR local: leyendo página ' + pageNum + ' de ' + pageCount + ' de ' + file.name + '…');
-      var page = await doc.getPage(pageNum);
-      var viewport = page.getViewport({ scale: OCR_RENDER_SCALE });
-      var canvas = document.createElement('canvas');
-      canvas.width = Math.ceil(viewport.width);
-      canvas.height = Math.ceil(viewport.height);
-      var context = canvas.getContext('2d', { alpha: false });
-      await page.render({ canvasContext: context, viewport: viewport }).promise;
-      var result = await worker.recognize(canvas);
-      ocrPages.push(result && result.data && result.data.text ? result.data.text : '');
-      canvas.width = 1;
-      canvas.height = 1;
-    }
-    if (run !== ocrRun) throw new DOMException('Cancelado', 'AbortError');
-    var suffix = doc.numPages > pageCount ? ' — OCR aplicado a ' + pageCount + ' de ' + doc.numPages + ' páginas' : '';
-    setLoadedText(normalizeOcrText(ocrPages.join('\n\n')), 'OCR listo: ' + file.name + ' (' + doc.numPages + (doc.numPages === 1 ? ' página' : ' páginas') + ')' + suffix);
-    if (doc.numPages > pageCount) {
-      setFileStatus('OCR listo: se procesaron ' + pageCount + ' de ' + doc.numPages + ' páginas para cuidar la memoria del dispositivo.', false);
+      var suffix = doc.numPages > pageCount ? ' — OCR aplicado a ' + pageCount + ' de ' + doc.numPages + ' páginas' : '';
+      setLoadedText(normalizeOcrText(ocrPages.join('\n\n')), 'OCR listo: ' + file.name + ' (' + doc.numPages + (doc.numPages === 1 ? ' página' : ' páginas') + ')' + suffix);
+      if (doc.numPages > pageCount) {
+        setFileStatus('OCR listo: se procesaron ' + pageCount + ' de ' + doc.numPages + ' páginas para cuidar la memoria del dispositivo.', false);
+      }
+    } catch (err) {
+      if (err && err.name !== 'AbortError') err.partialText = ocrPages.join('\n\n');
+      throw err;
+    } finally {
+      ocrPageProgress = null;
     }
   }
 
@@ -1004,18 +1045,24 @@
             return;
           }
           if (!window.Tesseract) {
+            btnExtract.disabled = false;
             setLoadedText(directText, note + ' — el motor OCR no está disponible; revise la conexión o convierta el PDF a texto');
             return;
           }
           setFileStatus('PDF sin capa de texto. Iniciando OCR local en español; el archivo no se envía…');
-          ocrPdf(doc, f, run).catch(function (err) {
+          ocrPdf(doc, f, run).then(function () {
+            btnExtract.disabled = false;
+          }).catch(function (err) {
             if (err && err.name === 'AbortError') return;
             if (run !== ocrRun) return;
-            setLoadedText(directText, note + ' — OCR no disponible: ' + (err && err.message ? err.message : 'error de reconocimiento'));
+            btnExtract.disabled = false;
+            var recovered = err && err.partialText ? normalizeOcrText(err.partialText) : directText;
+            setLoadedText(recovered, note + ' — OCR incompleto: ' + (err && err.message ? err.message : 'error de reconocimiento'));
           });
         }).catch(function (err) {
           if (err && err.name === 'AbortError') return;
           if (run !== ocrRun) return;
+          btnExtract.disabled = false;
           setFileStatus('No se pudo extraer el texto del PDF: ' + (err && err.message ? err.message : 'archivo dañado o protegido') + '.', true);
         });
       }).catch(function (err) {
@@ -1024,7 +1071,8 @@
         setFileStatus('No se pudo leer el PDF: ' + (err && err.message ? err.message : 'archivo dañado o protegido') + '.', true);
       });
     };
-    reader.onerror = function () { if (run === ocrRun) setFileStatus('No se pudo leer ' + f.name + '.', true); };
+    reader.onerror = function () { if (run === ocrRun) { btnExtract.disabled = false; setFileStatus('No se pudo leer ' + f.name + '.', true); } };
+    btnExtract.disabled = true;
     reader.readAsArrayBuffer(f);
   }
 
@@ -1203,6 +1251,9 @@
     var patterns = [
       { re: new RegExp('\\b' + tribunal + '[^.;\\n]{0,90}?sentencia\\s*(?:definitiva|interlocutoria)?\\s*(?:N(?:ro\\.?)?(?:\\.\\s*[°ºo]?|[°º]|o\\.?)?\\s*)?\\d{1,6}\\s*(?:\\/|de)\\s*\\d{2,4}(?:[^.;\\n]{0,45}?\\d{1,2}[\\/.-]\\d{1,2}[\\/.-]\\d{2,4})?', 'gi'), tag: 'Tribunal y sentencia', kind: 'fallo' },
       { re: /\b(?:SEF|DFA|SCJ|TAT|TAC|TAP|TCA)\s*(?:N(?:ro\.?)?(?:\.\s*[°ºo]?|[°º]|o\.?)?\s*)?\d{1,4}(?:[.-]\d{1,6})*\s*(?:\/|de)\s*\d{2,4}\b/gi, tag: 'Identificador jurisprudencial', kind: 'fallo' },
+      { re: /\b(?:Roj|A[J1]|A\])\s*[:\-]?\s*[A-Z]{2,8}\s+\d{1,8}\s*\/\s*(?:19|20)\d{2}\b/gi, tag: 'Roj (jurisprudencia española)', kind: 'fallo-extranjero' },
+      { re: /\bECLI:[A-Z]{2}:(?:[A-Z]{2}:)?[A-Z0-9]{1,10}:(?:19|20)\d{2}:[A-Z0-9-]+\b/gi, tag: 'ECLI', kind: 'fallo-extranjero' },
+      { re: /\b(?:STS|STSJ|SAN|SAP|ATS|AAN)\s+\d{1,8}\s*\/\s*(?:19|20)\d{2}\b/gi, tag: 'Identificador español', kind: 'fallo-extranjero' },
       { re: /\bIUE\s*[:\-]?\s*\d{1,3}-\d{1,9}\/\d{4}\b/gi, tag: 'IUE', kind: 'iue' },
       { re: /\b(?:ficha|ficha electrónica)\s*(?:N[.°ºo]\s*)?\d{1,3}-\d{1,9}\/\d{4}\b/gi, tag: 'Ficha', kind: 'iue' },
       { re: /\bsentencia\s*(?:definitiva|interlocutoria)?\s*(?:N(?:ro\.?)?(?:\.\s*[°ºo]?|[°º]|o\.?)?\s*)?\d{1,6}\s*(?:\/|de)\s*\d{2,4}\b/gi, tag: 'Sentencia sin tribunal', kind: 'fallo' },
@@ -1334,6 +1385,9 @@
         links.push({ label: 'IMPO (consulta oficial, puede pedir usuario)', href: 'https://www.impo.com.uy/cgi-bin/bases/consultaBasesBS.cgi?tipoServicio=3', best: true });
         links.push({ label: 'Búsqueda web en IMPO (sin usuario de IMPO)', href: 'https://www.google.com/search?q=' + q('site:impo.com.uy ' + query) });
       }
+    } else if (cit.type === 'jurisprudencia' && cit.kind === 'fallo-extranjero') {
+      links.push({ label: 'Búsqueda web de la referencia', href: 'https://www.google.com/search?q=' + q(query), best: true });
+      links.push({ label: 'Poder Judicial de España', href: 'https://www.poderjudicial.es/' });
     } else if (cit.type === 'jurisprudencia') {
       links.push({ label: 'BJN alternativo (precargado)', href: 'https://bjn-buscador.onrender.com/?q=' + q(query), best: true });
       links.push({ label: 'BJN oficial', href: 'https://bjn.poderjudicial.gub.uy/BJNPUBLICA/busquedaSimple.seam' });
