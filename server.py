@@ -296,15 +296,39 @@ def _playwright_worker():
             variantes.append(f'{prefijo} {base}')
         return list(dict.fromkeys(variantes))
 
+    _BJN_TRIBUNAL_ALIASES = {
+        'SCJ': ('suprema corte de justicia', 'suprema corte'),
+        'TCA': ('tribunal de lo contencioso administrativo', 'contencioso administrativo'),
+        'TAT': ('tribunal de apelaciones de trabajo', 'tribunal apelaciones trabajo', 'tribunal de apelaciones del trabajo'),
+        'TAC': ('tribunal de apelaciones civil', 'tribunal apelaciones civil'),
+        'TAP': ('tribunal de apelaciones penal', 'tribunal apelaciones penal'),
+    }
+
+    def _bjn_tribunal_matches(cita, resultado):
+        """Evita verificar una cita con otro tribunal cuando el prefijo es explícito."""
+        prefijo = str(cita.get('prefijo') or '').upper().strip()
+        if not prefijo or prefijo in {'SENTENCIA', 'FALLO'}:
+            return True
+        aliases = _BJN_TRIBUNAL_ALIASES.get(prefijo)
+        if not aliases:
+            # Para SEF, DFA y otros identificadores, el propio título suele incluir
+            # el prefijo; el identificador normalizado sigue siendo el criterio disponible.
+            return True
+        tribunal = _normalizar_texto(resultado.get('tribunal', ''))
+        return any(_normalizar_texto(alias) in tribunal for alias in aliases)
+
+    def _normalizar_texto(value: str) -> str:
+        normalized = unicodedata.normalize('NFKD', value or '')
+        normalized = ''.join(ch for ch in normalized if not unicodedata.combining(ch))
+        return re.sub(r'[^a-z0-9]', '', normalized.lower())
+
     def _bjn_result_matches(cita, resultado):
         objetivo = _normalizar_identificador(f"{cita['numero']}/{cita['anio']}")
         titulo = resultado.get('titulo', '')
         if not (objetivo in _normalizar_identificador(titulo)
                 or _normalizar_identificador(resultado.get('numero', '')) == objetivo):
             return False
-        # El BJN no siempre incluye el acrónimo del tribunal en el título indexado.
-        # El número/año es la coincidencia verificable; el prefijo original se conserva.
-        return True
+        return _bjn_tribunal_matches(cita, resultado)
 
     def _buscar_bjn_identificador(cita):
         """Busca en las primeras páginas y devuelve la primera coincidencia exacta."""
