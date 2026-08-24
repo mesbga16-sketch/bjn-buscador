@@ -362,6 +362,12 @@ def _playwright_worker():
 
     def verificar_jurisprudencia(cita, deadline=None):
         """Busca la sentencia por identificador canónico con un límite de tiempo."""
+        if cita.get('jurisprudencia_extranjera'):
+            jurisdiccion = cita.get('jurisdiccion') or 'extranjera'
+            return {**cita, 'fuente': 'Fuente jurisprudencial ' + str(jurisdiccion),
+                    'estado': 'no_verificable',
+                    'detalle': 'La referencia fue detectada, pero no corresponde al BJN uruguayo. Debe cotejarse en la fuente judicial de su jurisdicción.',
+                    'url': 'https://www.poderjudicial.es/'}
         if not cita.get('anio') or not cita.get('numero'):
             return {**cita, 'fuente': 'BJN', 'estado': 'no_verificable',
                     'detalle': 'La referencia no contiene número y año suficientes para consultar el BJN.',
@@ -389,10 +395,15 @@ def _playwright_worker():
         verify_deadline = time.monotonic() + _VERIFY_MAX_SECONDS
         for cita in citas:
             if time.monotonic() >= verify_deadline:
-                fuente = 'BJN' if cita['tipo'] == 'jurisprudencia' else 'IMPO'
+                if cita.get('jurisprudencia_extranjera'):
+                    fuente = 'Fuente jurisprudencial ' + str(cita.get('jurisdiccion') or 'extranjera')
+                    url = 'https://www.poderjudicial.es/'
+                else:
+                    fuente = 'BJN' if cita['tipo'] == 'jurisprudencia' else 'IMPO'
+                    url = BJN_SIMPLE if fuente == 'BJN' else None
                 resultados.append({**cita, 'fuente': fuente, 'estado': 'no_verificable',
                                    'detalle': 'Se alcanzó el tiempo máximo de verificación; no se afirma que la referencia no exista.',
-                                   'url': BJN_SIMPLE if fuente == 'BJN' else None})
+                                   'url': url})
             elif cita['tipo'] == 'jurisprudencia':
                 resultados.append(verificar_jurisprudencia(cita, deadline=verify_deadline))
             else:

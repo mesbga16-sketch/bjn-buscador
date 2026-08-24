@@ -42,6 +42,22 @@ JURISPRUDENCIA_RE = re.compile(
     re.IGNORECASE,
 )
 
+# Referencias españolas que aparecen en resoluciones extranjeras (por ejemplo,
+# "Roj SAN 2879/2026" y "ECLI:ES:AN:2026:2879"). Se etiquetan para no
+# enviarlas al BJN uruguayo durante la verificación automática.
+ROJ_RE = re.compile(
+    r'\bRoj\s+([A-Z]{2,8})\s+(\d{1,8})\s*/\s*(\d{4})\b',
+    re.IGNORECASE,
+)
+ECLI_RE = re.compile(
+    r'\bECLI:([A-Z]{2}):([A-Z0-9]{1,10}):((?:19|20)\d{2}):([A-Z0-9-]+)\b',
+    re.IGNORECASE,
+)
+JURISPRUDENCIA_ES_RE = re.compile(
+    r'\b(STS|STSJ|SAN|SAP|ATS|AAN)\s+(\d{1,8})\s*/\s*((?:19|20)\d{2})\b',
+    re.IGNORECASE,
+)
+
 # Número de ley escrito sin la palabra Ley (por ejemplo, "la 18.331" o "N° 18.331").
 # Se activa solamente si el contexto cercano permite clasificarlo como ley o decreto.
 NUMERO_LEY_SUELTO_RE = re.compile(rf'(?<![\w./])(\d{{1,2}}\.?\d{{3}})(?![\w/])')
@@ -159,6 +175,52 @@ def extraer_citas(texto: str, anio_referencia: int = 2026) -> list[dict]:
             'prefijo': _prefijo_jurisprudencia(m.group(1)),
             'numero': _normalizar_numero(m.group(2)),
             'anio': _normalizar_anio_corto(m.group(3), anio_referencia),
+            'inicio': m.start(),
+        })
+
+    for m in ROJ_RE.finditer(texto):
+        if _solapa_conocida(*m.span(), conocidas):
+            continue
+        conocidas.append(m.span())
+        encontradas.append({
+            'cita': m.group(0).strip(),
+            'tipo': 'jurisprudencia',
+            'prefijo': 'ROJ ' + m.group(1).upper(),
+            'numero': _normalizar_numero(m.group(2)),
+            'anio': m.group(3),
+            'jurisprudencia_extranjera': True,
+            'jurisdiccion': 'España',
+            'inicio': m.start(),
+        })
+
+    for m in ECLI_RE.finditer(texto):
+        if _solapa_conocida(*m.span(), conocidas):
+            continue
+        conocidas.append(m.span())
+        encontradas.append({
+            'cita': m.group(0).strip(),
+            'tipo': 'jurisprudencia',
+            'prefijo': 'ECLI',
+            'numero': m.group(4).upper(),
+            'anio': m.group(3),
+            'ecli': m.group(0).strip(),
+            'jurisprudencia_extranjera': True,
+            'jurisdiccion': m.group(1).upper(),
+            'inicio': m.start(),
+        })
+
+    for m in JURISPRUDENCIA_ES_RE.finditer(texto):
+        if _solapa_conocida(*m.span(), conocidas):
+            continue
+        conocidas.append(m.span())
+        encontradas.append({
+            'cita': m.group(0).strip(),
+            'tipo': 'jurisprudencia',
+            'prefijo': m.group(1).upper(),
+            'numero': _normalizar_numero(m.group(2)),
+            'anio': m.group(3),
+            'jurisprudencia_extranjera': True,
+            'jurisdiccion': 'España',
             'inicio': m.start(),
         })
 
