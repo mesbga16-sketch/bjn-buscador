@@ -1,413 +1,1887 @@
-<!DOCTYPE html>
-<html lang="es">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Uruguay No Alucina — Verificador de citas legales</title>
+<html><head>
+<meta http-equiv="content-type" content="text/html; charset=UTF-8"><meta charset="utf-8">
+<title>Verificación de Citas — Uruguay</title>
+<meta name="description" content="Extrae citas de normativa, jurisprudencia y doctrina de un escrito y genera enlaces de constatación contra BJN e IMPO.">
 <style>
   :root {
-    --tinta: #0f2e1f;
-    --verde: #0f5c3a;
-    --verde-claro: #14804f;
-    --gris: #f4f6f5;
-    --borde: #d3ddd8;
-    --texto: #1c2733;
-    --rojo: #c0392b;
-    --rojo-bg: #fee2e2;
-    --verde-ok-bg: #dcfce7;
-    --ambar: #92400e;
-    --ambar-bg: #fef3c7;
+    --bg: #EEF0E7;
+    --surface: #FBFBF6;
+    --surface-2: #F1F2E9;
+    --border: #D7D8C9;
+    --border-strong: #BFC1AE;
+    --ink: #1C2320;
+    --ink-muted: #58625A;
+    --ink-faint: #838C82;
+    --accent: #7A2E28;
+    --accent-strong: #601F1B;
+    --accent-ink: #FBF3F1;
+    --link: #1F4B4A;
+    --ok: #2F7A52;
+    --ok-bg: #E4F0E7;
+    --warn: #A3660F;
+    --warn-bg: #F5EBD8;
+    --danger: #B23B2E;
+    --danger-bg: #F5E1DD;
+    --neutral: #5B6B72;
+    --neutral-bg: #E7ECED;
+    --shadow: 0 1px 2px rgba(28,35,32,0.06), 0 4px 14px rgba(28,35,32,0.05);
+    --serif: "Iowan Old Style","Source Serif 4","Palatino Linotype",Palatino,Georgia,"Times New Roman",serif;
+    --sans: "Segoe UI","Public Sans",-apple-system,BlinkMacSystemFont,"Helvetica Neue",Arial,sans-serif;
+    --mono: "Cascadia Code","Consolas","SFMono-Regular",Menlo,monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #14181A;
+      --surface: #1B2120;
+      --surface-2: #212826;
+      --border: #333B38;
+      --border-strong: #454E4A;
+      --ink: #EAEBE2;
+      --ink-muted: #A7B0A7;
+      --ink-faint: #7C8680;
+      --accent: #D3766B;
+      --accent-strong: #E29489;
+      --accent-ink: #1B0D0B;
+      --link: #7FC6C1;
+      --ok: #58B384;
+      --ok-bg: #1E2E26;
+      --warn: #D9A34F;
+      --warn-bg: #33291A;
+      --danger: #E1786A;
+      --danger-bg: #33221E;
+      --neutral: #9AACB2;
+      --neutral-bg: #202A2C;
+      --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 4px 16px rgba(0,0,0,0.35);
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #14181A;
+    --surface: #1B2120;
+    --surface-2: #212826;
+    --border: #333B38;
+    --border-strong: #454E4A;
+    --ink: #EAEBE2;
+    --ink-muted: #A7B0A7;
+    --ink-faint: #7C8680;
+    --accent: #D3766B;
+    --accent-strong: #E29489;
+    --accent-ink: #1B0D0B;
+    --link: #7FC6C1;
+    --ok: #58B384;
+    --ok-bg: #1E2E26;
+    --warn: #D9A34F;
+    --warn-bg: #33291A;
+    --danger: #E1786A;
+    --danger-bg: #33221E;
+    --neutral: #9AACB2;
+    --neutral-bg: #202A2C;
+    --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 4px 16px rgba(0,0,0,0.35);
   }
 
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  :focus-visible { outline: 3px solid #f59e0b; outline-offset: 2px; }
-
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
   body {
-    font-family: 'Segoe UI', Arial, sans-serif;
-    font-size: 14px;
-    color: var(--texto);
-    background: var(--gris);
-    min-height: 100vh;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--sans);
+    font-size: 17px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+  ::selection { background: var(--accent); color: var(--accent-ink); }
+  a { color: var(--link); }
+  a:focus-visible, button:focus-visible, select:focus-visible, textarea:focus-visible, input:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
   }
 
-  header {
-    background: var(--tinta);
-    color: white;
-    padding: 16px 24px;
+  .wrap {
+    max-width: 1040px;
+    margin: 0 auto;
+    padding: 40px 24px 80px;
+    display: flex;
+    flex-direction: column;
+    gap: 28px;
+  }
+
+  /* ---------- Header ---------- */
+  header.top {
     display: flex;
     align-items: center;
-    gap: 14px;
+    gap: 18px;
   }
-  header .marca { display: flex; align-items: baseline; gap: 8px; }
-  header h1 { font-size: 18px; font-weight: 700; letter-spacing: 0.2px; }
-  header .subtitulo { font-size: 12px; color: rgba(255,255,255,0.65); }
-  header nav { margin-left: auto; }
-  header nav a {
-    font-size: 12px;
-    color: rgba(255,255,255,0.75);
-    text-decoration: none;
-    border-bottom: 1px dotted rgba(255,255,255,0.4);
+  .seal {
+    flex: none;
+    width: 52px;
+    height: 52px;
   }
-  header nav a:hover { color: white; }
-
-  .container { max-width: 900px; margin: 0 auto; padding: 28px 16px 60px; }
-
-  .hero { margin-bottom: 22px; }
-  .hero h2 { font-size: 22px; color: var(--tinta); margin-bottom: 8px; }
-  .hero p { color: #445048; line-height: 1.55; max-width: 700px; }
-
-  .fuentes { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
-  .fuente-chip {
-    font-size: 11px;
+  h1 {
+    font-family: var(--serif);
     font-weight: 600;
-    color: var(--verde-claro);
-    background: white;
-    border: 1px solid var(--borde);
-    border-radius: 20px;
-    padding: 4px 12px;
+    font-size: 31px;
+    line-height: 1.15;
+    margin: 0;
+    text-wrap: balance;
+    color: var(--ink);
+  }
+  .lede {
+    color: var(--ink-muted);
+    font-size: 16px;
+    margin: 6px 0 0;
+    max-width: 62ch;
   }
 
-  .panel {
-    background: white;
-    border: 1px solid var(--borde);
+  /* ---------- Alcance callout ---------- */
+  .alcance {
+    background: var(--surface);
+    border: 1px solid var(--border);
     border-radius: 8px;
-    padding: 20px;
+    padding: 16px 18px;
+    font-size: 15.5px;
+    color: var(--ink-muted);
+    line-height: 1.55;
+  }
+  .alcance strong { color: var(--ink); font-weight: 600; }
+
+  /* ---------- Cards / panels ---------- */
+  .panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    box-shadow: var(--shadow);
+  }
+  .panel-body { padding: 20px; }
+  .panel-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 16px 20px 0;
+  }
+  .panel-title {
+    font-family: var(--serif);
+    font-size: 19px;
+    font-weight: 600;
+    margin: 0;
   }
 
-  label {
+  label.field-label {
     display: block;
-    font-size: 11px;
-    font-weight: 700;
-    color: var(--tinta);
+    font-size: 13.5px;
+    font-weight: 600;
+    letter-spacing: 0.03em;
     text-transform: uppercase;
-    letter-spacing: 0.4px;
-    margin-bottom: 6px;
+    color: var(--ink-muted);
+    margin-bottom: 8px;
   }
 
-  textarea {
+  textarea#input-text {
     width: 100%;
     min-height: 220px;
     resize: vertical;
-    border: 1px solid var(--borde);
-    border-radius: 5px;
-    padding: 12px 14px;
-    font-size: 14px;
-    font-family: inherit;
-    color: var(--texto);
+    background: var(--surface-2);
+    border: 1px solid var(--border-strong);
+    border-radius: 8px;
+    padding: 14px;
+    font-family: var(--sans);
+    font-size: 16px;
+    line-height: 1.55;
+    color: var(--ink);
   }
-  textarea:focus {
-    outline: none;
-    border-color: var(--verde-claro);
-    box-shadow: 0 0 0 2px rgba(20,128,79,0.15);
-  }
+  textarea#input-text::placeholder { color: var(--ink-faint); }
 
-  .acciones { display: flex; align-items: center; gap: 12px; margin-top: 14px; }
-  .btn {
-    padding: 10px 26px;
-    border: none;
-    border-radius: 5px;
-    cursor: pointer;
-    font-size: 14px;
-    font-weight: 700;
-    background: var(--verde-claro);
-    color: white;
-    transition: opacity 0.15s;
-  }
-  .btn:hover:not(:disabled) { opacity: 0.88; }
-  .btn:disabled { opacity: 0.6; cursor: default; }
-  .btn-secondary { background: white; color: var(--verde); border: 1px solid var(--borde); }
-
-  .ayuda { margin-top: 6px; color: #667; font-size: 12px; }
-
-  .status { font-size: 13px; color: #445048; display: none; align-items: center; gap: 8px; }
-  .status.visible { display: flex; }
-  .status.error { color: var(--rojo); }
-  .status.info { color: #445048; }
-
-  .spinner {
-    width: 13px; height: 13px;
-    border: 2px solid rgba(20,128,79,0.25);
-    border-top-color: var(--verde-claro);
-    border-radius: 50%;
-    animation: spin 0.7s linear infinite;
-  }
-  .status.error .spinner { display: none; }
-  @keyframes spin { to { transform: rotate(360deg); } }
-
-  .resumen {
+  .input-row {
     display: flex;
-    gap: 10px;
-    margin: 22px 0 14px;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-top: 12px;
     flex-wrap: wrap;
   }
-  .resumen-item {
-    flex: 1;
-    min-width: 130px;
-    background: white;
-    border: 1px solid var(--borde);
-    border-radius: 8px;
-    padding: 12px 16px;
-    text-align: center;
+  .input-row .left {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
   }
-  .resumen-item .n { font-size: 22px; font-weight: 700; }
-  .resumen-item .l { font-size: 11px; color: #667; text-transform: uppercase; letter-spacing: 0.3px; }
-  .resumen-item.ok .n { color: var(--verde); }
-  .resumen-item.no .n { color: var(--rojo); }
-  .resumen-item.dud .n { color: var(--ambar); }
-
-  .citas-table { width: 100%; border-collapse: collapse; font-size: 13px; background: white;
-                 border: 1px solid var(--borde); border-radius: 8px; overflow: hidden; }
-  .citas-table th {
-    text-align: left;
-    padding: 10px 12px;
-    background: var(--gris);
-    color: var(--tinta);
-    font-size: 11px;
-    text-transform: uppercase;
-    letter-spacing: 0.3px;
-    border-bottom: 2px solid var(--borde);
+  .char-count {
+    font-family: var(--mono);
+    font-variant-numeric: tabular-nums;
+    font-size: 13.5px;
+    color: var(--ink-faint);
   }
-  .citas-table td { padding: 12px; border-bottom: 1px solid var(--borde); vertical-align: top; }
-  .citas-table tr:last-child td { border-bottom: none; }
-  .citas-table a { color: var(--verde-claro); }
+  .file-btn {
+    font-size: 13.5px;
+    color: var(--link);
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 4px 0;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+  input[type="file"] { display: none; }
 
-  .estado-badge {
-    display: inline-block;
-    padding: 3px 10px;
+  /* ---------- Buttons ---------- */
+  button.btn {
+    font-family: var(--sans);
+    font-size: 15px;
+    font-weight: 600;
+    border-radius: 7px;
+    padding: 9px 16px;
+    cursor: pointer;
+    border: 1px solid var(--border-strong);
+    background: var(--surface-2);
+    color: var(--ink);
+    transition: filter 0.12s ease;
+  }
+  button.btn:hover { filter: brightness(0.97); }
+  :root[data-theme="dark"] button.btn:hover,
+  @media (prefers-color-scheme: dark) { }
+  button.btn.primary {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--accent-ink);
+  }
+  button.btn.primary:hover { filter: brightness(1.06); }
+  button.btn.ghost {
+    background: transparent;
+    border-color: transparent;
+    color: var(--ink-muted);
+  }
+  button.btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+  /* ---------- Summary strip ---------- */
+  .summary {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 1px;
+    background: var(--border);
+    border: 1px solid var(--border);
     border-radius: 10px;
-    font-size: 11px;
-    font-weight: 700;
+    overflow: hidden;
+  }
+  .guided-actions {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-top: 14px;
+  }
+  .selection-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-top: 14px;
+    padding-top: 14px;
+    border-top: 1px solid var(--border);
+  }
+  .select-all-check {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 15px;
+    color: var(--ink-muted);
+    cursor: pointer;
+    user-select: none;
+  }
+  .select-all-check input { accent-color: var(--accent); width: 15px; height: 15px; cursor: pointer; }
+  .cit-check {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    user-select: none;
+  }
+  .cit-check input { accent-color: var(--accent); width: 15px; height: 15px; cursor: pointer; }
+  .howto {
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px 20px;
+    margin-top: 14px;
+    font-size: 15.5px;
+    color: var(--ink-muted);
+    line-height: 1.65;
+  }
+  .howto-title {
+    font-family: var(--serif);
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--ink);
+    margin: 0 0 8px;
+  }
+  .howto-privacy {
+    background: var(--ok-bg);
+    border-left: 3px solid var(--ok);
+    border-radius: 0 6px 6px 0;
+    padding: 10px 14px;
+    margin: 0 0 14px;
+    font-size: 14.5px;
+    font-weight: 600;
+    color: var(--ink);
+    line-height: 1.5;
+  }
+  .howto ol { margin: 0; padding-left: 20px; }
+  .howto li { margin-bottom: 6px; }
+  .howto li strong { color: var(--ink); font-weight: 600; }
+  .howto-note { margin: 10px 0 0; font-style: italic; color: var(--ink-faint); font-size: 14px; }
+  .floating-guided {
+    position: fixed;
+    left: 50%;
+    bottom: 22px;
+    transform: translateX(-50%);
+    z-index: 40;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: var(--surface);
+    border: 1px solid var(--border-strong);
+    border-radius: 999px;
+    padding: 8px 10px 8px 18px;
+    box-shadow: var(--shadow);
+    max-width: calc(100% - 32px);
+  }
+  .floating-guided-count {
+    font-family: var(--mono);
+    font-variant-numeric: tabular-nums;
+    font-size: 14px;
+    color: var(--ink-muted);
     white-space: nowrap;
   }
-  .estado-verificada    { background: var(--verde-ok-bg); color: var(--verde); }
-  .estado-no_encontrada { background: var(--rojo-bg); color: var(--rojo); }
-  .estado-no_verificable{ background: var(--ambar-bg); color: var(--ambar); }
-
-  .vacio { text-align: center; padding: 30px 10px; color: #667; font-size: 13px; }
-
-  footer {
-    max-width: 900px;
-    margin: 30px auto 0;
-    padding: 0 16px 30px;
-    font-size: 12px;
-    color: #667;
-    line-height: 1.6;
+  .floating-guided button.btn { border-radius: 999px; }
+  .modal-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.45);
+    z-index: 100;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
   }
-  footer strong { color: var(--tinta); }
+  .modal-box {
+    background: var(--surface);
+    border: 1px solid var(--border-strong);
+    border-radius: 10px;
+    box-shadow: var(--shadow);
+    padding: 22px;
+    width: 100%;
+    max-width: 560px;
+    max-height: 85vh;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .modal-title { font-family: var(--serif); font-size: 18px; font-weight: 600; color: var(--ink); margin: 0; }
+  .modal-hint { font-size: 14px; color: var(--ink-muted); margin: 0; line-height: 1.5; }
+  #text-modal-area {
+    width: 100%;
+    min-height: 260px;
+    flex: 1;
+    font-family: var(--mono);
+    font-size: 13px;
+    line-height: 1.5;
+    color: var(--ink);
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 10px;
+    resize: vertical;
+  }
+  .modal-actions { display: flex; justify-content: flex-end; }
+  .stat {
+    background: var(--surface);
+    padding: 14px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .stat .n {
+    font-family: var(--mono);
+    font-variant-numeric: tabular-nums;
+    font-size: 25px;
+    font-weight: 600;
+    color: var(--ink);
+  }
+  .stat .lbl {
+    font-size: 12.5px;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    color: var(--ink-muted);
+  }
+  .stat.total .n { color: var(--accent); }
+  .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; }
+  .dot.verificada { background: var(--ok); }
+  .dot.diferencias { background: var(--warn); }
+  .dot.no-localizada { background: var(--danger); }
+  .dot.pendiente, .dot.no-verificable { background: var(--neutral); }
+
+  /* ---------- Results groups ---------- */
+  .group { display: flex; flex-direction: column; gap: 12px; }
+  .group-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .group-head h2 {
+    font-family: var(--serif);
+    font-size: 18px;
+    font-weight: 600;
+    margin: 0;
+  }
+  .group-count {
+    font-family: var(--mono);
+    font-size: 13.5px;
+    color: var(--ink-faint);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .citation-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 9px;
+    padding: 14px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    transition: box-shadow 0.2s ease, border-color 0.2s ease;
+  }
+  .citation-card.current {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px var(--accent);
+  }
+  .citation-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  .subtype-badge {
+    font-family: var(--mono);
+    font-size: 12px;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    padding: 3px 7px;
+  }
+  .citation-text {
+    font-family: var(--serif);
+    font-size: 17px;
+    color: var(--ink);
+    line-height: 1.5;
+  }
+  .citation-text .hit { font-weight: 700; }
+
+  select.status-pill {
+    font-family: var(--sans);
+    font-size: 14px;
+    font-weight: 600;
+    border-radius: 999px;
+    padding: 5px 12px 5px 10px;
+    border: 1px solid var(--border-strong);
+    background: var(--neutral-bg);
+    color: var(--neutral);
+    cursor: pointer;
+  }
+  select.status-pill[data-status="verificada"] { background: var(--ok-bg); color: var(--ok); border-color: transparent; }
+  select.status-pill[data-status="diferencias"] { background: var(--warn-bg); color: var(--warn); border-color: transparent; }
+  select.status-pill[data-status="no-localizada"] { background: var(--danger-bg); color: var(--danger); border-color: transparent; }
+  select.status-pill[data-status="no-verificable"] { background: var(--neutral-bg); color: var(--neutral); border-color: transparent; }
+  select.status-pill[data-status="descartada"] { background: var(--neutral-bg); color: var(--ink-faint); border-color: transparent; }
+
+  .verify-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+  }
+  .verify-row .lbl {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--ink);
+    margin-right: 2px;
+    width: 100%;
+  }
+  a.verify-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 14.5px;
+    font-weight: 700;
+    text-decoration: none;
+    color: var(--accent-ink);
+    background: var(--accent);
+    border: 1px solid var(--accent);
+    border-radius: 7px;
+    padding: 9px 15px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.12);
+  }
+  a.verify-link:hover { filter: brightness(1.08); }
+  a.verify-link:active { filter: brightness(0.95); }
+  a.verify-link.best { box-shadow: 0 0 0 2px var(--accent-strong), 0 1px 3px rgba(0,0,0,0.12); }
+  .opened-tag {
+    font-size: 12.5px;
+    font-style: italic;
+    color: var(--ink-faint);
+    margin-left: auto;
+  }
+
+  input.note-input {
+    font-family: var(--sans);
+    font-size: 14.5px;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 7px 10px;
+    color: var(--ink);
+    width: 100%;
+  }
+  input.note-input::placeholder { color: var(--ink-faint); }
+
+  .empty-state {
+    color: var(--ink-faint);
+    font-size: 15px;
+    padding: 6px 2px;
+  }
+
+  /* ---------- Footer actions ---------- */
+  .footer-actions {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  .footer-actions .btns { display: flex; gap: 10px; }
+  .toast {
+    font-size: 14px;
+    color: var(--ok);
+    opacity: 0;
+    transition: opacity 0.2s ease;
+  }
+  .toast.show { opacity: 1; }
+
+  footer.meta {
+    text-align: center;
+    font-size: 13px;
+    color: var(--ink-faint);
+    padding-top: 8px;
+  }
+
+  /* ---------- Alta manual y control del cotejo ---------- */
+  .manual-grid {
+    display: grid;
+    grid-template-columns: 180px minmax(0, 1fr) auto;
+    gap: 10px;
+    align-items: end;
+  }
+  .manual-grid .field-label { margin-bottom: 6px; }
+  .manual-grid select,
+  .manual-grid input,
+  .search-input,
+  .source-input {
+    width: 100%;
+    min-height: 40px;
+    padding: 8px 10px;
+    border: 1px solid var(--border-strong);
+    border-radius: 7px;
+    background: var(--surface-2);
+    color: var(--ink);
+    font: inherit;
+    font-size: 14.5px;
+  }
+  .audit-box {
+    display: grid;
+    gap: 9px;
+    padding: 12px;
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    background: var(--surface-2);
+  }
+  .audit-title {
+    margin: 0;
+    color: var(--ink);
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+  }
+  .audit-checks {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px 14px;
+  }
+  .audit-check {
+    display: flex;
+    align-items: flex-start;
+    gap: 7px;
+    color: var(--ink-muted);
+    font-size: 13.5px;
+    line-height: 1.35;
+  }
+  .audit-check input { margin-top: 2px; accent-color: var(--accent); }
+  .audit-meta {
+    color: var(--ink-faint);
+    font-size: 12.5px;
+  }
+  .citation-warning {
+    padding: 8px 10px;
+    border-left: 3px solid var(--warn);
+    border-radius: 0 5px 5px 0;
+    background: var(--warn-bg);
+    color: var(--ink);
+    font-size: 13.5px;
+  }
+  .occurrences {
+    color: var(--ink-faint);
+    font-size: 12.5px;
+  }
+  .footer-actions .btns { flex-wrap: wrap; }
+  .auto-output { overflow-x: auto; }
+  .auto-output .citas-table { min-width: 720px; }
+  .auto-output .citas-table td { line-height: 1.45; }
+  .auto-help { margin: 0; color: var(--ink-muted); font-size: 14px; line-height: 1.55; }
 
   @media (max-width: 640px) {
-    header { flex-wrap: wrap; }
-    header nav { margin-left: 0; }
+    .summary { grid-template-columns: repeat(2, 1fr); }
+    h1 { font-size: 26px; }
+    .manual-grid { grid-template-columns: 1fr; }
+    .audit-checks { grid-template-columns: 1fr; }
   }
 </style>
-</head>
-<body>
 
-<header>
-  <div class="marca">
-    <h1>🇺🇾 Uruguay No Alucina</h1>
-    <span class="subtitulo">verificador de citas legales</span>
-  </div>
-  <nav>
-    <a href="/">Buscar jurisprudencia (BJN) →</a>
-  </nav>
-</header>
+</head><body><div class="wrap">
 
-<main class="container">
-
-  <div class="hero">
-    <h2>¿La cita existe, o la inventó la IA?</h2>
-    <p>
-      Pegá un escrito, dictamen o resolución. Se detectan las citas a leyes, decretos y
-      jurisprudencia uruguaya que contiene, y cada una se verifica contra la fuente oficial
-      correspondiente — no contra lo que diga un modelo de lenguaje.
-    </p>
-    <div class="fuentes">
-      <span class="fuente-chip">BJN — Poder Judicial</span>
-      <span class="fuente-chip">IMPO — Leyes y Decretos</span>
+  <header class="top">
+    <svg class="seal" viewBox="0 0 52 52" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Sello">
+      <circle cx="26" cy="26" r="24.5" fill="none" stroke="var(--accent)" stroke-width="1.4"></circle>
+      <circle cx="26" cy="26" r="19.5" fill="none" stroke="var(--accent)" stroke-width="1"></circle>
+      <path d="M26 15 v20 M18 19 h16 M20.5 19 l-4 8 a4 4 0 0 0 8 0 z M31.5 19 l-4 8 a4 4 0 0 0 8 0 z M21 39 h10" stroke="var(--accent)" stroke-width="1.3" fill="none" stroke-linecap="round" stroke-linejoin="round"></path>
+    </svg>
+    <div>
+      <h1>Verificación de citas (normativa, jurisprudencia y doctrina)</h1>
+      <p class="lede">Detecta referencias jurídicas, facilita el cotejo en las fuentes y deja un registro verificable de la revisión.</p>
     </div>
+  </header>
+
+  <div class="alcance">
+    <strong>Alcance.</strong> Esta herramienta extrae citas del texto y compone enlaces de búsqueda hacia fuentes públicas (BJN, IMPO, vLex Uruguay). No consulta esas fuentes por sí misma ni certifica de forma automática la existencia de una cita: cada resultado debe abrirse y cotejarse por quien redacta. El estado de cada cita (verificada, con diferencias, no localizada) lo fija el usuario luego de revisar la fuente, no la herramienta. Una cita real puede además estar aplicada de modo impropio al caso; esto tampoco lo evalúa la herramienta. Admite .txt, .pdf (con capa de texto; los escaneos sin OCR no se pueden leer) y .docx (Word moderno; el .doc antiguo debe guardarse como .docx). El archivo se procesa en el navegador y no se envía a ningún servidor. La lectura de PDF y DOCX carga las bibliotecas públicas fijadas desde cdnjs; el contenido del usuario no se envía a ese servicio.
   </div>
 
-  <div class="panel">
-    <label for="texto">Texto a verificar</label>
-    <textarea id="texto" placeholder="Pegá acá el texto. Ejemplos de citas que se detectan: &#10;&#8226; Ley N.º 19.355&#10;&#8226; Decreto N.º 152/013&#10;&#8226; Decreto-Ley 14.500&#10;&#8226; Sentencia N.º 123/2020" aria-describedby="texto-ayuda"></textarea>
-    <div id="texto-ayuda" class="ayuda">Se reconocen leyes, decretos, decretos-ley y referencias de jurisprudencia uruguaya.</div>
-    <div class="acciones">
-      <button type="button" class="btn" id="btn-verificar" onclick="verificar()">Verificar citas</button>
-      <button type="button" class="btn btn-secondary" id="btn-cancelar" onclick="cancelarVerificacion()" hidden>Cancelar</button>
-      <div class="status" id="status" role="status" aria-live="polite" aria-atomic="true"><span class="spinner" aria-hidden="true"></span><span id="status-msg"></span></div>
-    </div>
+  <div class="howto">
+    <p class="howto-title">Cómo se usa</p>
+    <p class="howto-privacy">El contenido se procesa en su navegador: el texto y los archivos (.txt, .pdf, .docx) se leen en su computadora y no se suben a ningún servidor. Para PDF y DOCX, el navegador debe cargar las bibliotecas públicas fijadas; el contenido del archivo no se envía.</p>
+    <ol>
+      <li>Pegue el texto (o cargue un .txt, .pdf o .docx) y presione <strong>Extraer citas</strong>.</li>
+      <li>Revise lo detectado. Si falta una referencia, incorpórela con <strong>Agregar cita manual</strong>.</li>
+      <li>Abra la fuente desde la tarjeta. Puede ajustar antes la consulta de búsqueda sin alterar la cita original.</li>
+      <li>Marque los controles de identidad, contenido y fuente consultada. El estado <strong>Verificada</strong> se habilita cuando esos controles están completos.</li>
+      <li>Copie el informe o descárguelo en TXT o JSON para conservar el resultado y la trazabilidad del cotejo.</li>
+    </ol>
+    <p class="howto-note"><strong>IMPO:</strong> la consulta oficial general puede solicitar un usuario de IMPO. La opción <strong>Búsqueda web en IMPO (sin usuario de IMPO)</strong> permite localizar la norma mediante un buscador web y luego abrir el texto alojado en IMPO.</p>
+    <p class="howto-note">La herramienta nunca decide por usted si una cita es correcta: solo abre la fuente cuando usted hace clic. El resultado lo fija quien revisa, después de leerla.</p>
   </div>
 
-  <div id="resumen-wrap" style="display:none;">
-    <div class="resumen">
-      <div class="resumen-item ok"><div class="n" id="n-verificadas">0</div><div class="l">Verificadas</div></div>
-      <div class="resumen-item no"><div class="n" id="n-no-encontradas">0</div><div class="l">No encontradas</div></div>
-      <div class="resumen-item dud"><div class="n" id="n-no-verificables">0</div><div class="l">No se pudo verificar</div></div>
+  <section class="panel">
+    <div class="panel-body">
+      <label class="field-label" for="input-text">Texto a cotejar</label>
+      <textarea id="input-text" placeholder="Pegue aquí el escrito, dictamen o resolución. Se buscarán referencias a leyes, decretos, artículos de código, sentencias, IUE y doctrina."></textarea>
+      <div class="input-row">
+        <div class="left">
+          <span class="char-count" id="char-count">0 caracteres</span>
+          <button class="file-btn" id="file-trigger" type="button">Cargar archivo (.txt, .pdf, .docx)</button>
+          <input type="file" id="file-input" accept=".txt,.pdf,.docx,text/plain,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document">
+          <span class="char-count" id="file-status"></span>
+        </div>
+        <div class="left">
+          <button class="btn" id="btn-clear" type="button">Limpiar</button>
+          <button class="btn primary" id="btn-extract" type="button">Extraer citas</button>
+        </div>
+      </div>
     </div>
+  </section>
 
-    <table class="citas-table" id="tabla-citas">
-      <thead>
-        <tr><th>Cita</th><th>Tipo</th><th>Fuente</th><th>Estado</th><th>Detalle</th></tr>
-      </thead>
-      <tbody id="tbody-citas"></tbody>
-    </table>
-    <div class="vacio" id="vacio" style="display:none;">
-      No se encontraron citas legales reconocibles en el texto.
+  <section class="panel" id="manual-section">
+    <div class="panel-head"><h2 class="panel-title">Agregar una cita omitida</h2></div>
+    <div class="panel-body manual-grid">
+      <div>
+        <label class="field-label" for="manual-type">Categoría</label>
+        <select id="manual-type">
+          <option value="normativa" selected="selected">Normativa</option>
+          <option value="jurisprudencia">Jurisprudencia</option>
+          <option value="doctrina">Doctrina</option>
+        </select>
+      </div>
+      <div>
+        <label class="field-label" for="manual-text">Referencia exacta</label>
+        <input id="manual-text" type="text" placeholder="Ej.: SCJ, sentencia n.º 123/2025, de 4/6/2025">
+      </div>
+      <button class="btn" id="btn-add-manual" type="button">Agregar cita manual</button>
+    </div>
+  </section>
+
+  <section id="summary-section" style="display:none;">
+    <div class="summary" id="summary">
+      <div class="stat total"><span class="n" id="stat-total">0</span><span class="lbl">Citas detectadas</span></div>
+      <div class="stat"><span class="n" id="stat-pendiente">0</span><span class="lbl"><span class="dot pendiente"></span>Pendientes</span></div>
+      <div class="stat"><span class="n" id="stat-verificada">0</span><span class="lbl"><span class="dot verificada"></span>Verificadas</span></div>
+      <div class="stat"><span class="n" id="stat-diferencias">0</span><span class="lbl"><span class="dot diferencias"></span>Con diferencias</span></div>
+      <div class="stat"><span class="n" id="stat-no-localizada">0</span><span class="lbl"><span class="dot no-localizada"></span>No localizadas</span></div>
+    </div>
+    <div class="selection-row">
+      <label class="select-all-check"><input type="checkbox" id="select-all-pending"> Seleccionar todas las pendientes</label>
+      <span class="char-count" id="selection-count"></span>
+    </div>
+    <div class="guided-actions">
+      <button class="btn primary" id="btn-guided" type="button">Iniciar verificación guiada</button>
+      <span class="char-count" id="guided-status"></span>
+    </div>
+  </section>
+
+  <section id="auto-section" class="panel">
+    <div class="panel-head"><h2 class="panel-title">Consulta automática oficial</h2></div>
+    <div class="panel-body">
+      <p class="auto-help">Envía el texto al servidor para contrastar las citas detectadas contra IMPO y el BJN. Esta consulta conserva la función automática que ya tenía la herramienta; el cotejo manual, las notas y los controles de identidad permanecen en las tarjetas de abajo.</p>
+      <div class="input-row" style="margin-top:12px;">
+        <div class="left">
+          <button class="btn primary" id="btn-auto" type="button">Verificar automáticamente</button>
+          <button class="btn" id="btn-auto-cancel" type="button" hidden>Cancelar</button>
+          <span class="char-count" id="auto-status" role="status" aria-live="polite"></span>
+        </div>
+      </div>
+      <div id="auto-output" class="auto-output" style="display:none;"></div>
+    </div>
+  </section>
+
+  <section id="results-section" style="display:none;">
+    <div class="group" id="group-normativa">
+      <div class="group-head"><h2>Normativa</h2><span class="group-count" id="count-normativa">0</span></div>
+      <div class="cards" id="cards-normativa"></div>
+    </div>
+    <div style="height:22px;"></div>
+    <div class="group" id="group-jurisprudencia">
+      <div class="group-head"><h2>Jurisprudencia</h2><span class="group-count" id="count-jurisprudencia">0</span></div>
+      <div class="cards" id="cards-jurisprudencia"></div>
+    </div>
+    <div style="height:22px;"></div>
+    <div class="group" id="group-doctrina">
+      <div class="group-head"><h2>Doctrina</h2><span class="group-count" id="count-doctrina">0</span></div>
+      <div class="cards" id="cards-doctrina"></div>
+    </div>
+  </section>
+
+  <section id="report-section" class="panel" style="display:none;">
+    <div class="panel-body footer-actions">
+      <span class="toast" id="toast">Copiado.</span>
+      <div class="btns">
+        <button class="btn" id="btn-download-json" type="button">Descargar datos (.json)</button>
+        <button class="btn" id="btn-download" type="button">Descargar informe (.txt)</button>
+        <button class="btn primary" id="btn-copy" type="button">Copiar informe</button>
+      </div>
+    </div>
+  </section>
+
+  <footer class="meta">Fuentes de constatación: jurisprudencia en BJN (bjn.poderjudicial.gub.uy y bjn-buscador.onrender.com); normativa en IMPO (impo.com.uy); doctrina en vLex Uruguay, Google, Colibri (UdelaR), FDER, Biblioteca del Poder Judicial, OPAC UM y Ágora UCU. Herramienta de apoyo al despacho; no reemplaza la lectura de la fuente.</footer>
+
+</div>
+
+<div class="modal-backdrop" id="text-modal" style="display:none;" role="dialog" aria-label="Texto para copiar">
+  <div class="modal-box">
+    <p class="modal-title" id="text-modal-title">Copie el texto</p>
+    <p class="modal-hint">No se pudo copiar solo. Este texto ya está seleccionado: presione Ctrl+C (Cmd+C en Mac) y luego pegue donde lo necesite.</p>
+    <textarea id="text-modal-area" readonly="readonly"></textarea>
+    <div class="modal-actions">
+      <button class="btn primary" id="text-modal-close" type="button">Cerrar</button>
     </div>
   </div>
+</div>
 
-</main>
+<div class="floating-guided" id="floating-guided" style="display:none;">
+  <span class="floating-guided-count" id="floating-guided-count"></span>
+  <button class="btn primary" id="btn-guided-float" type="button">Siguiente ▶</button>
+</div>
 
-<footer>
-  <strong>Cómo funciona:</strong> las leyes y decretos se verifican contra el Registro Nacional de
-  Leyes y Decretos de IMPO; la jurisprudencia se busca en tiempo real en la Base de Jurisprudencia
-  Nacional (BJN) del Poder Judicial. Un resultado <strong>"no se pudo verificar"</strong> significa que
-  la fuente oficial no respondió o que faltó un dato (ej. el año de la norma) — nunca se informa
-  "no encontrada" por una falla técnica. Esta herramienta ayuda a detectar citas alucinadas por IA,
-  pero no reemplaza la verificación profesional antes de presentar un escrito.
-</footer>
+<!-- Dependencias públicas fijadas y verificadas con SRI.
+     La lectura de PDF y DOCX requiere conexión para cargarlas; el resto
+     de la herramienta funciona localmente. -->
+<script
+  src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"
+  integrity="sha384-/1qUCSGwTur9vjf/z9lmu/eCUYbpOTgSjmpbMQZ1/CtX2v/WcAIKqRv+U1DUCG6e"
+  crossorigin="anonymous"></script>
+<script
+  src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"
+  integrity="sha384-nFoSjZIoH3CCp8W639jJyQkuPHinJ2NHe7on1xvlUA7SuGfJAfvMldrsoAVm6ECz"
+  crossorigin="anonymous"></script>
 
 <script>
-function escapeHtml(str) {
-  return String(str)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
-}
+(function () {
+  "use strict";
 
-const ESTADO_LABEL = {
-  verificada:     'Verificada',
-  no_encontrada:  'No encontrada',
-  no_verificable: 'No se pudo verificar',
-};
+  var textarea = document.getElementById('input-text');
+  var charCount = document.getElementById('char-count');
+  var fileTrigger = document.getElementById('file-trigger');
+  var fileInput = document.getElementById('file-input');
+  var btnClear = document.getElementById('btn-clear');
+  var btnExtract = document.getElementById('btn-extract');
+  var summarySection = document.getElementById('summary-section');
+  var resultsSection = document.getElementById('results-section');
+  var reportSection = document.getElementById('report-section');
+  var manualType = document.getElementById('manual-type');
+  var manualText = document.getElementById('manual-text');
+  var btnAddManual = document.getElementById('btn-add-manual');
+  var autoOutput = document.getElementById('auto-output');
+  var btnAuto = document.getElementById('btn-auto');
+  var btnAutoCancel = document.getElementById('btn-auto-cancel');
+  var autoStatus = document.getElementById('auto-status');
 
-async function pollJob(jobId, { onProgress, maxWaitMs = 120000, intervalMs = 2000, signal } = {}) {
-  const deadline = Date.now() + maxWaitMs;
-  let elapsed = 0;
-  while (Date.now() < deadline) {
-    await new Promise(res => setTimeout(res, intervalMs));
-    elapsed += intervalMs;
-    if (signal?.aborted) throw new DOMException('Cancelado', 'AbortError');
-    if (onProgress) onProgress(elapsed);
-    const r = await fetch(`/api/job/${jobId}`, { signal });
-    const data = await r.json();
-    if (!r.ok) throw new Error(data.error || 'El servidor no pudo completar la verificación.');
-    if (data.status === 'pending') continue;
-    if (data.status === 'error') throw new Error(data.error || 'Error desconocido');
-    if (data.status === 'done') return data;
-    throw new Error('Estado desconocido: ' + data.status);
-  }
-  throw new Error('La verificación tardó demasiado. Intentá de nuevo.');
-}
+  var ESTADO_LABEL = {
+    verificada: 'Verificada',
+    no_encontrada: 'No encontrada',
+    no_verificable: 'No se pudo verificar'
+  };
 
-function setStatus(msg, tipo) {
-  const el = document.getElementById('status');
-  const msgEl = document.getElementById('status-msg');
-  if (!tipo) { el.classList.remove('visible', 'error'); return; }
-  el.classList.add('visible');
-  el.classList.toggle('error', tipo === 'error');
-  msgEl.textContent = msg;
-}
-
-function renderResumen(citas) {
-  const contar = estado => citas.filter(c => c.estado === estado).length;
-  document.getElementById('n-verificadas').textContent     = contar('verificada');
-  document.getElementById('n-no-encontradas').textContent  = contar('no_encontrada');
-  document.getElementById('n-no-verificables').textContent = contar('no_verificable');
-}
-
-function renderCitas(citas) {
-  const tbody   = document.getElementById('tbody-citas');
-  const wrap    = document.getElementById('resumen-wrap');
-  const resumen = document.querySelector('.resumen');
-  const tabla   = document.getElementById('tabla-citas');
-  const vacio   = document.getElementById('vacio');
-
-  wrap.style.display = 'block';
-
-  if (!citas.length) {
-    resumen.style.display = 'none';
-    tabla.style.display   = 'none';
-    vacio.style.display   = 'block';
-    return;
+  function escapeHtml(value) {
+    return String(value == null ? '' : value)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
   }
 
-  resumen.style.display = 'flex';
-  tabla.style.display   = 'table';
-  vacio.style.display   = 'none';
+  var citations = [];
+  var seq = 0;
+  var fileStatus = document.getElementById('file-status');
+  var guidedActive = false;
+  var guidedCurrentId = null;
+  var guidedTotal = 0;
+  var guidedSkipped = {};
+  var guidedList = [];
 
-  renderResumen(citas);
-  tbody.innerHTML = citas.map(c => `
-    <tr>
-      <td>${escapeHtml(c.cita)}</td>
-      <td>${escapeHtml(c.tipo)}</td>
-      <td>${escapeHtml(c.fuente)}</td>
-      <td><span class="estado-badge estado-${c.estado}">${ESTADO_LABEL[c.estado] || c.estado}</span></td>
-      <td>${c.url
-          ? `<a href="${escapeHtml(c.url)}" target="_blank" rel="noopener">${escapeHtml(c.detalle || 'Ver fuente')}</a>`
-          : escapeHtml(c.detalle || '')}</td>
-    </tr>
-  `).join('');
-  wrap.style.display = 'block';
-}
-
-let _verifyAbort = null;
-
-function cancelarVerificacion() {
-  if (_verifyAbort) _verifyAbort.abort();
-  _verifyAbort = null;
-  document.getElementById('btn-verificar').disabled = false;
-  document.getElementById('btn-cancelar').hidden = true;
-  setStatus('Verificación cancelada.', 'info');
-}
-
-async function verificar() {
-  const texto = document.getElementById('texto').value.trim();
-  if (!texto) {
-    setStatus('Pegá un texto para verificar.', 'error');
-    return;
+  async function pollJob(jobId, options) {
+    options = options || {};
+    var onProgress = options.onProgress;
+    var maxWaitMs = options.maxWaitMs || 120000;
+    var intervalMs = options.intervalMs || 2000;
+    var signal = options.signal;
+    var deadline = Date.now() + maxWaitMs;
+    var elapsed = 0;
+    while (Date.now() < deadline) {
+      await new Promise(function (resolve) { setTimeout(resolve, intervalMs); });
+      elapsed += intervalMs;
+      if (signal && signal.aborted) throw new DOMException('Cancelado', 'AbortError');
+      if (onProgress) onProgress(elapsed);
+      var r = await fetch('/api/job/' + jobId, { signal: signal });
+      var data = await r.json();
+      if (!r.ok) throw new Error(data.error || 'El servidor no pudo completar la verificación.');
+      if (data.status === 'pending') continue;
+      if (data.status === 'error') throw new Error(data.error || 'Error desconocido.');
+      if (data.status === 'done') return data;
+      throw new Error('Estado desconocido: ' + data.status);
+    }
+    throw new Error('La verificación tardó demasiado. Intentá de nuevo.');
   }
 
-  const btn = document.getElementById('btn-verificar');
-  const cancelBtn = document.getElementById('btn-cancelar');
-  if (_verifyAbort) _verifyAbort.abort();
-  _verifyAbort = new AbortController();
-  btn.disabled = true;
-  cancelBtn.hidden = false;
-  document.getElementById('resumen-wrap').style.display = 'none';
-  setStatus('Analizando el texto...', 'loading');
+  textarea.addEventListener('input', function () {
+    charCount.textContent = textarea.value.length.toLocaleString('es-UY') + ' caracteres';
+  });
 
-  try {
-    const r = await fetch('/api/verificar', {
-      method:  'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify({ texto }),
-      signal:  _verifyAbort.signal,
+  // El worker se carga desde la misma versión pública fijada de PDF.js.
+  // Así se evita incrustar un segundo bundle ejecutable dentro del adjunto.
+  if (window.pdfjsLib) {
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+  }
+
+  function setFileStatus(msg, isError) {
+    fileStatus.textContent = msg;
+    fileStatus.style.color = isError ? 'var(--danger)' : 'var(--ink-faint)';
+  }
+
+  function setLoadedText(text, note) {
+    textarea.value = text;
+    charCount.textContent = text.length.toLocaleString('es-UY') + ' caracteres';
+    var scarce = text.replace(/\s/g, '').length < 50;
+    setFileStatus(note + (scarce ? ' — atención: casi no se extrajo texto; puede ser un escaneo sin capa de texto' : ''), scarce);
+  }
+
+  function readAsTxt(f) {
+    var reader = new FileReader();
+    reader.onload = function (e) { setLoadedText(String(e.target.result || ''), 'Cargado: ' + f.name); };
+    reader.onerror = function () { setFileStatus('No se pudo leer ' + f.name + '.', true); };
+    reader.readAsText(f, 'utf-8');
+  }
+
+  function readAsPdf(f) {
+    if (!window.pdfjsLib) { setFileStatus('El lector de PDF no está disponible en esta sesión.', true); return; }
+    setFileStatus('Extrayendo texto de ' + f.name + '…');
+    var reader = new FileReader();
+    reader.onload = function (e) {
+      pdfjsLib.getDocument({ data: e.target.result }).promise.then(function (doc) {
+        var pages = new Array(doc.numPages);
+        var chain = Promise.resolve();
+        var _loop = function (pageNum) {
+          chain = chain.then(function () {
+            return doc.getPage(pageNum).then(function (page) {
+              return page.getTextContent().then(function (tc) {
+                pages[pageNum - 1] = tc.items.map(function (it) { return it.str; }).join(' ');
+              });
+            });
+          });
+        };
+        for (var i = 1; i <= doc.numPages; i++) _loop(i);
+        chain.then(function () {
+          setLoadedText(pages.join('\n\n'), 'Cargado: ' + f.name + ' (' + doc.numPages + (doc.numPages === 1 ? ' página' : ' páginas') + ')');
+        });
+      }).catch(function (err) {
+        setFileStatus('No se pudo leer el PDF: ' + (err && err.message ? err.message : 'archivo dañado o protegido') + '.', true);
+      });
+    };
+    reader.onerror = function () { setFileStatus('No se pudo leer ' + f.name + '.', true); };
+    reader.readAsArrayBuffer(f);
+  }
+
+  function readAsDocx(f) {
+    if (!window.mammoth) { setFileStatus('El lector de Word no está disponible en esta sesión.', true); return; }
+    setFileStatus('Extrayendo texto de ' + f.name + '…');
+    var reader = new FileReader();
+    reader.onload = function (e) {
+      mammoth.extractRawText({ arrayBuffer: e.target.result }).then(function (result) {
+        setLoadedText(result.value, 'Cargado: ' + f.name);
+      }).catch(function (err) {
+        setFileStatus('No se pudo leer el documento: ' + (err && err.message ? err.message : 'formato no reconocido') + '.', true);
+      });
+    };
+    reader.onerror = function () { setFileStatus('No se pudo leer ' + f.name + '.', true); };
+    reader.readAsArrayBuffer(f);
+  }
+
+  fileTrigger.addEventListener('click', function () { fileInput.click(); });
+  fileInput.addEventListener('change', function () {
+    var f = fileInput.files[0];
+    if (!f) return;
+    var name = f.name.toLowerCase();
+    if (/\.txt$/.test(name)) readAsTxt(f);
+    else if (/\.pdf$/.test(name)) readAsPdf(f);
+    else if (/\.docx$/.test(name)) readAsDocx(f);
+    else {
+      setFileStatus('Formato no admitido: ' + f.name + '. Use .txt, .pdf o .docx (el .doc antiguo debe guardarse como .docx), o copie y pegue el texto.', true);
+    }
+    fileInput.value = '';
+  });
+
+  btnClear.addEventListener('click', function () {
+    textarea.value = '';
+    charCount.textContent = '0 caracteres';
+    setFileStatus('');
+    citations = [];
+    resetGuided();
+    summarySection.style.display = 'none';
+    resultsSection.style.display = 'none';
+    reportSection.style.display = 'none';
+    autoOutput.style.display = 'none';
+    autoOutput.innerHTML = '';
+    cancelAutomatic();
+  });
+
+  // ---------------------------------------------------------------
+  // Extraction
+  // ---------------------------------------------------------------
+
+  function esc(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
+
+  function findAll(re, text) {
+    var out = [];
+    var m;
+    re.lastIndex = 0;
+    while ((m = re.exec(text))) {
+      out.push({ start: m.index, end: m.index + m[0].length, raw: m[0], groups: m });
+      if (m[0].length === 0) re.lastIndex++;
+    }
+    return out;
+  }
+
+  // drop matches fully contained within a larger match of the same pass
+  function dropContained(matches) {
+    matches.sort(function (a, b) { return a.start - b.start || (b.end - b.start) - (a.end - a.start); });
+    var out = [];
+    for (var i = 0; i < matches.length; i++) {
+      var m = matches[i];
+      var contained = false;
+      for (var j = 0; j < out.length; j++) {
+        if (m.start >= out[j].start && m.end <= out[j].end) { contained = true; break; }
+      }
+      if (!contained) out.push(m);
+    }
+    return out;
+  }
+
+  function cleanNum(s) { return s.replace(/\./g, '').replace(/\s/g, ''); }
+
+  function compactKey(s) { return s.trim().toLowerCase().replace(/\s+/g, ' '); }
+
+  function yearFourDigits(y) {
+    if (!y) return null;
+    y = String(y);
+    if (y.length === 2) return Number(y) <= 30 ? '20' + y : '19' + y;
+    if (y.length === 3) return '1' + y;
+    return y;
+  }
+
+  function dedupeMatches(all) {
+    all = dropContained(all);
+    all.sort(function (a, b) { return a.start - b.start; });
+    var out = [];
+    var seen = {};
+    all.forEach(function (m) {
+      var key = m.kind + '::' + compactKey(m.raw);
+      if (seen[key]) { seen[key].occurrences += 1; return; }
+      var item = {
+        subtype: m.tag,
+        kind: m.kind,
+        raw: m.raw.trim().replace(/\s+/g, ' '),
+        query: m.raw.trim().replace(/\s+/g, ' '),
+        num: m.numGroup && m.groups[m.numGroup] ? cleanNum(m.groups[m.numGroup]) : null,
+        year: m.yearGroup && m.groups[m.yearGroup] ? yearFourDigits(m.groups[m.yearGroup]) : null,
+        start: m.start,
+        occurrences: 1
+      };
+      seen[key] = item;
+      out.push(item);
     });
-    const init = await r.json();
-    if (!r.ok || !init.job_id) throw new Error(init.error || 'Error al iniciar la verificación');
+    return out;
+  }
 
-    const data = await pollJob(init.job_id, {
-      signal: _verifyAbort.signal,
-      onProgress: (ms) => {
-        const s = Math.round(ms / 1000);
-        setStatus(`Verificando citas contra IMPO y el BJN... (${s}s)`, 'loading');
+  function extractNormativa(text) {
+    var patterns = [
+      { re: /\bart(?:ículo)?s?\.?\s*\d+(?:\s*(?:,|y|a)\s*\d+)*\s+(?:de\s+la\s+)?Ley\s*(?:N(?:ro\.?)?(?:\.\s*[°ºo]?|[°º]|o\.?)?\s*)?(\d{1,2}\.\d{3}|\d{4,6})(?:\s+de\s+(\d{4}))?\b/gi, tag: 'Artículo de ley', kind: 'ley', numGroup: 1, yearGroup: 2 },
+      { re: /\bLey\s*(?:N(?:ro\.?)?(?:\.\s*[°ºo]?|[°º]|o\.?)?\s*)?(\d{1,2}\.\d{3}|\d{4,6})(?:\s+de\s+(\d{4}))?\b/gi, tag: 'Ley', kind: 'ley', numGroup: 1, yearGroup: 2 },
+      { re: /\bDecreto[-\s]?Ley\s*(?:N(?:ro\.?)?(?:\.\s*[°ºo]?|[°º]|o\.?)?\s*)?(\d{1,2}\.\d{3}|\d{4,6})(?:\s+de\s+(\d{4}))?\b/gi, tag: 'Decreto-ley', kind: 'decreto-ley', numGroup: 1, yearGroup: 2 },
+      { re: /\bDecreto\s*(?:N(?:ro\.?)?(?:\.\s*[°ºo]?|[°º]|o\.?)?\s*)?(\d{1,4})\s*\/\s*(\d{2,4})\b/gi, tag: 'Decreto', kind: 'decreto', numGroup: 1, yearGroup: 2 },
+      { re: /\b(?:Acordada|Resolución|Circular)\s*(?:N(?:ro\.?)?(?:\.\s*[°ºo]?|[°º]|o\.?)?\s*)?(\d{1,6})(?:\s*\/\s*(\d{2,4}))?\b/gi, tag: 'Acordada, resolución o circular', kind: 'otra-norma', numGroup: 1, yearGroup: 2 },
+      { re: /\bConvenio\s*(?:N(?:ro\.?)?(?:\.\s*[°ºo]?|[°º]|o\.?)?\s*)?\d+\s*(?:de\s*la\s*)?OIT\b|\bOIT\s*N(?:ro\.?)?(?:\.\s*[°ºo]?|[°º]|o\.?)?\s*\d+\b/gi, tag: 'Convenio OIT', kind: 'convenio' },
+      { re: /\bart(?:ículo)?s?\.?\s*\d+(?:\s*(?:,|y|a)\s*\d+)*[^.;\n]{0,55}?\b(CGP|C\.G\.P\.|Código General del Proceso|Código Civil|C\.P\.P\.|Código Penal|Código del Proceso Penal|Constitución(?: de la República)?)\b/gi, tag: 'Artículo de cuerpo normativo', kind: 'cuerpo-normativo' },
+      { re: /\b(Constitución(?: de la República)?|Código General del Proceso|CGP|Código Civil|Código Penal|Código del Proceso Penal|CPP)\b/gi, tag: 'Cuerpo normativo (mención)', kind: 'cuerpo-normativo' }
+    ];
+    var all = [];
+    patterns.forEach(function (p) {
+      findAll(p.re, text).forEach(function (m) {
+        m.tag = p.tag; m.kind = p.kind; m.numGroup = p.numGroup; m.yearGroup = p.yearGroup; all.push(m);
+      });
+    });
+    return dedupeMatches(all);
+  }
+
+  function extractJurisprudencia(text) {
+    var tribunal = '(?:SCJ|Suprema Corte de Justicia|TAT(?:\\s*(?:de\\s*)?[1-4][.°ºa-z]*\\s*T(?:urno)?)?|Tribunal(?:es)? de Apelaciones(?: del Trabajo| en lo Civil| de Familia| en lo Penal)?(?:\\s*(?:de\\s*)?[1-7][.°ºa-z]*\\s*T(?:urno)?)?|Juzgado Letrado(?: de Primera Instancia)?[^.;\\n]{0,55})';
+    var patterns = [
+      { re: new RegExp('\\b' + tribunal + '[^.;\\n]{0,90}?sentencia\\s*(?:definitiva|interlocutoria)?\\s*(?:N(?:ro\\.?)?(?:\\.\\s*[°ºo]?|[°º]|o\\.?)?\\s*)?\\d{1,6}\\s*(?:\\/|de)\\s*\\d{2,4}(?:[^.;\\n]{0,45}?\\d{1,2}[\\/.-]\\d{1,2}[\\/.-]\\d{2,4})?', 'gi'), tag: 'Tribunal y sentencia', kind: 'fallo' },
+      { re: /\bIUE\s*[:\-]?\s*\d{1,3}-\d{1,9}\/\d{4}\b/gi, tag: 'IUE', kind: 'iue' },
+      { re: /\b(?:ficha|ficha electrónica)\s*(?:N[.°ºo]\s*)?\d{1,3}-\d{1,9}\/\d{4}\b/gi, tag: 'Ficha', kind: 'iue' },
+      { re: /\bsentencia\s*(?:definitiva|interlocutoria)?\s*(?:N(?:ro\.?)?(?:\.\s*[°ºo]?|[°º]|o\.?)?\s*)?\d{1,6}\s*(?:\/|de)\s*\d{2,4}\b/gi, tag: 'Sentencia sin tribunal', kind: 'fallo' },
+      { re: new RegExp('\\b' + tribunal + '\\b', 'gi'), tag: 'Tribunal (mención)', kind: 'tribunal' }
+    ];
+    var all = [];
+    patterns.forEach(function (p) {
+      findAll(p.re, text).forEach(function (m) { m.tag = p.tag; m.kind = p.kind; all.push(m); });
+    });
+    return dedupeMatches(all);
+  }
+
+  var AUTORES = ['Plá Rodríguez', 'Ermida Uriarte', 'Garmendia', 'Rosenbaum', 'Castello', 'Mangarelli', 'Valentin Giménez', 'Barbagelata', 'Gauthier', 'Raso Delgue'];
+
+  // Recorta el fragmento capturado al límite real de la cita, en vez de
+  // a un largo fijo de caracteres (que arrastraba palabras de la oración
+  // siguiente, ajenas a la referencia bibliográfica). Si hay un paréntesis
+  // pegado al autor, corta en su cierre (más una página que lo siga, tipo
+  // "p. 46"); si no, corta en el primer punto o punto y coma de la oración.
+  function trimDoctrinaContext(window, autorLen) {
+    var afterAutor = window.slice(autorLen);
+    var gapMatch = afterAutor.match(/^[\s,:]{0,4}\(/);
+    if (gapMatch) {
+      var i = autorLen + gapMatch[0].length - 1;
+      var depth = 0;
+      for (; i < window.length; i++) {
+        if (window[i] === '(') depth++;
+        else if (window[i] === ')') {
+          depth--;
+          if (depth === 0) {
+            var cut = i + 1;
+            var tail = window.slice(cut, cut + 20).match(/^[,;]?\s*(p[áa]g?\.?|p\.)\s*\d+[\wº°.,\-\s]*/i);
+            if (tail) cut += tail[0].length;
+            return window.slice(0, cut).replace(/\s+/g, ' ').trim();
+          }
+        }
+      }
+    }
+    // el punto no cuenta como fin de oración si sigue un número (p. 32,
+    // t. III, art. 45): son abreviaturas de referencia, no cierres de frase
+    var sentenceEnd = afterAutor.search(/[.;]\s(?!\d)|\n/);
+    if (sentenceEnd !== -1 && sentenceEnd < 90) {
+      return window.slice(0, autorLen + sentenceEnd + 1).replace(/\s+/g, ' ').trim();
+    }
+    return window.slice(0, autorLen + 50).replace(/\s+/g, ' ').trim();
+  }
+
+  function extractDoctrina(text) {
+    var out = [];
+    var seen = {};
+    var structuredAuthors = {};
+    var workRe = /\b([A-ZÁÉÍÓÚÜÑ][A-Za-zÁÉÍÓÚÜÑáéíóúüñ'\u2019\-]+(?:\s+[A-ZÁÉÍÓÚÜÑ][A-Za-zÁÉÍÓÚÜÑáéíóúüñ'\u2019\-]+){0,2})\s+[\u201c"]?en\s+su\s+trabajo\s+[\u201c"]([^\u201d"\n]{8,220}?)(?=(?:[.\u201d"]?\s*(?:P[áa]g(?:s)?\.?|p{1,2}\.)\s*\d+|[\u201d"]))/gi;
+    var workMatch;
+    while ((workMatch = workRe.exec(text))) {
+      var author = workMatch[1].replace(/\s+/g, ' ').trim();
+      var title = workMatch[2].replace(/\s+/g, ' ').trim().replace(/[.\s]+$/, '');
+      var tail = text.slice(workMatch.index + workMatch[0].length, workMatch.index + workMatch[0].length + 55);
+      var pages = tail.match(/^[.\u201d"]?\s*((?:P[áa]g(?:s)?\.?|p{1,2}\.)\s*\d+(?:\s*[-\u2013]\s*\d+)?)/i);
+      var end = workMatch.index + workMatch[0].length + (pages ? pages[0].length : 0);
+      var rawWork = text.slice(workMatch.index, end).replace(/\s+/g, ' ').trim();
+      var lastName = author.split(/\s+/).pop();
+      structuredAuthors[compactKey(author)] = true;
+      structuredAuthors[compactKey(lastName)] = true;
+      seen['work::' + compactKey(author) + '::' + compactKey(title)] = true;
+      out.push({ subtype: 'Doctrina (obra identificada)', kind: 'doctrina', raw: rawWork, query: author + ' "' + title + '"', autor: author, title: title, pages: pages ? pages[1] : null, year: null, start: workMatch.index, occurrences: 1, structured: true });
+    }
+    AUTORES.forEach(function (autor) {
+      if (structuredAuthors[compactKey(autor)]) return;
+      var re = new RegExp('\\b' + esc(autor) + '\\b', 'g');
+      var m;
+      while ((m = re.exec(text))) {
+        var window = text.slice(m.index, Math.min(text.length, m.index + 160));
+        var ctx = trimDoctrinaContext(window, autor.length);
+        var key = autor + '::' + ctx.slice(0, 40).toLowerCase();
+        if (seen[key]) continue;
+        seen[key] = true;
+        var yearMatch = ctx.match(/\((\d{4})\)/);
+        out.push({ subtype: 'Doctrina (autor reconocido)', kind: 'doctrina', raw: ctx, query: ctx, autor: autor, year: yearMatch ? yearMatch[1] : null, start: m.index, occurrences: 1 });
       }
     });
-
-    setStatus('', '');
-    renderCitas(data.citas || []);
-  } catch (e) {
-    if (e.name === 'AbortError') return;
-    setStatus('Error: ' + e.message, 'error');
-  } finally {
-    btn.disabled = false;
-    cancelBtn.hidden = true;
-    _verifyAbort = null;
+    var genericPatterns = [
+      /\b([A-ZÁÉÍÓÚÜÑ][A-ZÁÉÍÓÚÜÑ'’\-]{2,}(?:\s+[A-ZÁÉÍÓÚÜÑ][A-ZÁÉÍÓÚÜÑ'’\-]{2,}){0,3}),\s*([A-ZÁÉÍÓÚÜÑ][A-Za-zÁÉÍÓÚÜÑáéíóúüñ'’\-]+(?:\s+[A-ZÁÉÍÓÚÜÑ][A-Za-zÁÉÍÓÚÜÑáéíóúüñ'’\-]+){0,3}),\s*([^.;\n]{8,180})/g,
+      /\b([A-ZÁÉÍÓÚÜÑ][a-záéíóúüñ'’\-]+(?:\s+[A-ZÁÉÍÓÚÜÑ][a-záéíóúüñ'’\-]+){0,3}),\s*([A-ZÁÉÍÓÚÜÑ]\.)\s*\((\d{4})\)\.\s*([^.;\n]{8,180})/g
+    ];
+    genericPatterns.forEach(function (re) {
+      var m;
+      while ((m = re.exec(text))) {
+        var genericAuthor = (m[1] + ', ' + m[2]).trim();
+        var genericLastName = m[1].split(/\s+/).pop();
+        if (structuredAuthors[compactKey(genericAuthor)] || structuredAuthors[compactKey(genericLastName)]) continue;
+        var raw = m[0].replace(/\s+/g, ' ').trim();
+        var key = compactKey(raw);
+        if (seen[key]) continue;
+        seen[key] = true;
+        var genericYear = raw.match(/\b(?:18|19|20)\d{2}\b/);
+        out.push({ subtype: 'Referencia bibliográfica', kind: 'doctrina', raw: raw, query: raw, autor: genericAuthor, year: genericYear ? genericYear[0] : null, start: m.index, occurrences: 1 });
+      }
+    });
+    out.sort(function (a, b) { return a.start - b.start; });
+    return out;
   }
-}
+
+  // ---------------------------------------------------------------
+  // Link building — every pattern below was checked live against the
+  // target site before use; unverifiable guesses fall back to a plain
+  // search link rather than a fabricated direct URL.
+  // ---------------------------------------------------------------
+
+  function q(s) { return encodeURIComponent(s); }
+
+  function linksFor(cit) {
+    var links = [];
+    var query = cit.query || cit.raw;
+    if (cit.type === 'normativa') {
+      if (cit.kind === 'ley' && cit.num) {
+        if (cit.year) {
+          links.push({ label: 'IMPO (directo)', href: 'https://www.impo.com.uy/bases/leyes/' + cit.num + '-' + cit.year, best: true });
+        }
+        links.push({ label: 'IMPO (consulta oficial, puede pedir usuario)', href: 'https://www.impo.com.uy/cgi-bin/bases/consultaBasesBS.cgi?tipoServicio=3', best: !cit.year });
+        links.push({ label: 'Búsqueda web en IMPO (sin usuario de IMPO)', href: 'https://www.google.com/search?q=' + q('site:impo.com.uy/bases/leyes Ley ' + cit.num) });
+      } else if (cit.kind === 'decreto' && cit.num) {
+        var y = cit.year;
+        if (y) {
+          links.push({ label: 'IMPO (directo)', href: 'https://www.impo.com.uy/bases/decretos/' + cit.num + '-' + y, best: true });
+        }
+        links.push({ label: 'IMPO (consulta oficial, puede pedir usuario)', href: 'https://www.impo.com.uy/cgi-bin/bases/consultaBasesBS.cgi?tipoServicio=3', best: !y });
+        links.push({ label: 'Búsqueda web en IMPO (sin usuario de IMPO)', href: 'https://www.google.com/search?q=' + q('site:impo.com.uy/bases/decretos Decreto ' + cit.num + '/' + (cit.year || '')) });
+      } else {
+        links.push({ label: 'IMPO (consulta oficial, puede pedir usuario)', href: 'https://www.impo.com.uy/cgi-bin/bases/consultaBasesBS.cgi?tipoServicio=3', best: true });
+        links.push({ label: 'Búsqueda web en IMPO (sin usuario de IMPO)', href: 'https://www.google.com/search?q=' + q('site:impo.com.uy ' + query) });
+      }
+    } else if (cit.type === 'jurisprudencia') {
+      links.push({ label: 'BJN alternativo (precargado)', href: 'https://bjn-buscador.onrender.com/?q=' + q(query), best: true });
+      links.push({ label: 'BJN oficial', href: 'https://bjn.poderjudicial.gub.uy/BJNPUBLICA/busquedaSimple.seam' });
+    } else {
+      links.push({ label: 'vLex Uruguay', href: 'https://uy.vlex.com/search?q=' + q(query) });
+      links.push({ label: 'Google Académico', href: 'https://scholar.google.com/scholar?q=' + q(query), best: true });
+      links.push({ label: 'Colibri (UdelaR)', href: 'https://www.colibri.udelar.edu.uy/jspui/handle/20.500.12008/4615/simple-search?query=' + q(query) });
+      links.push({ label: 'Buscador FDER', href: 'https://www.fder.edu.uy/buscador?keys=' + q(query) });
+      links.push({ label: 'Biblioteca Poder Judicial (buscar ahí)', href: 'https://biblioteca.poderjudicial.gub.uy/' });
+      links.push({ label: 'OPAC Universidad de Montevideo (buscar ahí)', href: 'https://opac.um.edu.uy/' });
+      links.push({ label: 'Ágora UCU', href: 'https://www.ucu.edu.uy/categoria/Agora-325' });
+    }
+    return links;
+  }
+
+  // ---------------------------------------------------------------
+  // Render
+  // ---------------------------------------------------------------
+
+  function statusLabel(s) {
+    return { pendiente: 'Pendiente', verificada: 'Verificada', diferencias: 'Con diferencias', 'no-localizada': 'No localizada', 'no-verificable': 'No verificable', descartada: 'Descartada (falso positivo)' }[s];
+  }
+
+  function prepareCitation(cit) {
+    if (!cit.query) cit.query = cit.raw;
+    if (!cit.occurrences) cit.occurrences = 1;
+    if (!cit.audit) cit.audit = { sourceLocated: false, identityMatch: false, contentMatch: false, validityChecked: false };
+    if (!cit.sourceLabel) cit.sourceLabel = '';
+    if (!cit.sourceUrl) cit.sourceUrl = '';
+    if (!cit.consultedAt) cit.consultedAt = '';
+    return cit;
+  }
+
+  function verifiedReady(cit) {
+    var a = cit.audit || {};
+    return !!(a.sourceLocated && a.identityMatch && a.contentMatch && (cit.type !== 'normativa' || a.validityChecked));
+  }
+
+  function incompleteReason(cit) {
+    if (cit.type === 'jurisprudencia' && cit.kind === 'fallo' && !/(SCJ|Suprema Corte|TAT|Tribunal|Juzgado)/i.test(cit.raw)) return 'La referencia no identifica el tribunal. Conviene completarlo antes del cotejo.';
+    if (cit.type === 'jurisprudencia' && cit.kind === 'tribunal') return 'La mención no contiene el número ni el año de la sentencia.';
+    if (cit.type === 'doctrina' && !cit.year && !/(p(?:ág)?\.?|t\.|vol\.|ed\.)\s*\d+/i.test(cit.raw)) return 'La referencia bibliográfica parece incompleta (sin año, edición, tomo o página detectables).';
+    if (cit.type === 'normativa' && cit.kind === 'otra-norma' && !cit.year) return 'La referencia no incluye el año. Puede haber normas con el mismo número.';
+    return '';
+  }
+
+  function renderCard(cit) {
+    prepareCitation(cit);
+    var card = document.createElement('div');
+    card.className = 'citation-card';
+    card.setAttribute('data-cid', cit.id);
+
+    var top = document.createElement('div');
+    top.className = 'citation-top';
+
+    var checkLabel = document.createElement('label');
+    checkLabel.className = 'cit-check';
+    var check = document.createElement('input');
+    check.type = 'checkbox';
+    check.checked = !!cit.selected;
+    check.addEventListener('change', function () {
+      cit.selected = check.checked;
+      updateSelectionUI();
+    });
+    checkLabel.appendChild(check);
+    var checkTxt = document.createElement('span');
+    checkTxt.className = 'subtype-badge';
+    checkTxt.textContent = cit.subtype;
+    checkLabel.appendChild(checkTxt);
+    if (cit.occurrences > 1) {
+      var occurrences = document.createElement('span');
+      occurrences.className = 'occurrences';
+      occurrences.textContent = cit.occurrences + ' apariciones';
+      checkLabel.appendChild(occurrences);
+    }
+    top.appendChild(checkLabel);
+
+    var select = document.createElement('select');
+    select.className = 'status-pill';
+    select.setAttribute('data-status', cit.status);
+    ['pendiente', 'verificada', 'diferencias', 'no-localizada', 'no-verificable', 'descartada'].forEach(function (s) {
+      var opt = document.createElement('option');
+      opt.value = s;
+      opt.textContent = statusLabel(s);
+      if (s === cit.status) opt.selected = true;
+      select.appendChild(opt);
+    });
+    select.addEventListener('change', function () {
+      if (select.value === 'verificada' && !verifiedReady(cit)) {
+        showToast('Complete los controles del cotejo antes de marcar la cita como verificada.');
+        select.value = cit.status;
+        return;
+      }
+      cit.status = select.value;
+      select.setAttribute('data-status', select.value);
+      updateSummary();
+      if (cit.status !== 'pendiente' && guidedActive && guidedCurrentId === cit.id) {
+        setTimeout(function () { advanceGuided(false); }, 250);
+      }
+    });
+    top.appendChild(select);
+    card.appendChild(top);
+
+    var txt = document.createElement('div');
+    txt.className = 'citation-text';
+    txt.textContent = cit.raw;
+    card.appendChild(txt);
+
+    var warningText = incompleteReason(cit);
+    if (warningText) {
+      var warning = document.createElement('div');
+      warning.className = 'citation-warning';
+      warning.textContent = warningText;
+      card.appendChild(warning);
+    }
+
+    var search = document.createElement('input');
+    search.className = 'search-input';
+    search.type = 'text';
+    search.setAttribute('aria-label', 'Consulta de búsqueda');
+    search.placeholder = 'Consulta de búsqueda';
+    search.value = cit.query;
+    search.addEventListener('change', function () { cit.query = search.value.trim() || cit.raw; renderAll(); });
+    card.appendChild(search);
+
+    var row = document.createElement('div');
+    row.className = 'verify-row';
+    var lbl = document.createElement('span');
+    lbl.className = 'lbl';
+    lbl.textContent = 'Haga clic para verificar en:';
+    row.appendChild(lbl);
+    linksFor(cit).forEach(function (l) {
+      var a = document.createElement('a');
+      a.className = 'verify-link' + (l.best ? ' best' : '');
+      a.href = l.href;
+      a.target = '_blank';
+      a.rel = 'noopener noreferrer';
+      a.textContent = l.label + ' ↗';
+      a.addEventListener('click', function () { markOpened(cit, l); });
+      row.appendChild(a);
+    });
+    var openedTag = document.createElement('span');
+    openedTag.className = 'opened-tag';
+    openedTag.textContent = 'Fuente abierta';
+    openedTag.style.display = cit.opened ? '' : 'none';
+    row.appendChild(openedTag);
+    card.appendChild(row);
+
+    var audit = document.createElement('div');
+    audit.className = 'audit-box';
+    var auditTitle = document.createElement('p');
+    auditTitle.className = 'audit-title';
+    auditTitle.textContent = 'Control manual del cotejo';
+    audit.appendChild(auditTitle);
+    var checks = document.createElement('div');
+    checks.className = 'audit-checks';
+    var checkDefs = [
+      ['sourceLocated', 'La fuente fue localizada y abierta'],
+      ['identityMatch', 'Los datos identificatorios coinciden'],
+      ['contentMatch', 'El texto o la tesis citada coincide']
+    ];
+    if (cit.type === 'normativa') checkDefs.push(['validityChecked', 'La vigencia o el texto temporal fue controlado']);
+    checkDefs.forEach(function (def) {
+      var lab = document.createElement('label');
+      lab.className = 'audit-check';
+      var cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.checked = !!cit.audit[def[0]];
+      cb.addEventListener('change', function () {
+        cit.audit[def[0]] = cb.checked;
+        if (cit.status === 'verificada' && !verifiedReady(cit)) {
+          cit.status = 'pendiente';
+          select.value = 'pendiente';
+          select.setAttribute('data-status', 'pendiente');
+          updateSummary();
+        }
+      });
+      lab.appendChild(cb);
+      lab.appendChild(document.createTextNode(def[1]));
+      checks.appendChild(lab);
+    });
+    audit.appendChild(checks);
+    var source = document.createElement('input');
+    source.className = 'source-input';
+    source.type = 'url';
+    source.placeholder = 'URL o identificación precisa de la fuente consultada';
+    source.value = cit.sourceUrl || cit.sourceLabel || '';
+    source.addEventListener('input', function () { cit.sourceUrl = source.value.trim(); });
+    audit.appendChild(source);
+    var meta = document.createElement('div');
+    meta.className = 'audit-meta';
+    meta.textContent = cit.consultedAt ? 'Última apertura registrada: ' + cit.consultedAt + (cit.sourceLabel ? ' (' + cit.sourceLabel + ')' : '') : 'Todavía no se registró la apertura de una fuente.';
+    audit.appendChild(meta);
+    card.appendChild(audit);
+
+    var note = document.createElement('input');
+    note.className = 'note-input';
+    note.type = 'text';
+    note.placeholder = 'Nota (opcional): fojas, tesis, observación…';
+    note.value = cit.note || '';
+    note.addEventListener('input', function () { cit.note = note.value; });
+    card.appendChild(note);
+
+    return card;
+  }
+
+  function renderGroup(type, containerId, countId) {
+    var container = document.getElementById(containerId);
+    container.innerHTML = '';
+    var items = citations.filter(function (c) { return c.type === type; });
+    document.getElementById(countId).textContent = items.length;
+    if (items.length === 0) {
+      var empty = document.createElement('div');
+      empty.className = 'empty-state';
+      empty.textContent = 'Sin citas detectadas en esta categoría.';
+      container.appendChild(empty);
+      return;
+    }
+    items.forEach(function (c) { container.appendChild(renderCard(c)); });
+  }
+
+  function renderAll() {
+    renderGroup('normativa', 'cards-normativa', 'count-normativa');
+    renderGroup('jurisprudencia', 'cards-jurisprudencia', 'count-jurisprudencia');
+    renderGroup('doctrina', 'cards-doctrina', 'count-doctrina');
+    updateSummary();
+    updateSelectionUI();
+  }
+
+  function updateSummary() {
+    var counts = { pendiente: 0, verificada: 0, diferencias: 0, 'no-localizada': 0, 'no-verificable': 0, descartada: 0 };
+    citations.forEach(function (c) { counts[c.status] = (counts[c.status] || 0) + 1; });
+    document.getElementById('stat-total').textContent = citations.length;
+    document.getElementById('stat-pendiente').textContent = counts.pendiente;
+    document.getElementById('stat-verificada').textContent = counts.verificada;
+    document.getElementById('stat-diferencias').textContent = counts.diferencias;
+    document.getElementById('stat-no-localizada').textContent = counts['no-localizada'];
+  }
+
+  // ---------------------------------------------------------------
+  // Verificación guiada — no abre nada por sí misma: no hay forma
+  // confiable de disparar window.open() desde código dentro de este
+  // artefacto (queda bloqueado sin aviso en algunos entornos, y forzarlo
+  // con un enlace "clicleado" por código puede navegar la pestaña actual
+  // en vez de abrir una nueva). Solo resalta y hace scroll a la próxima
+  // cita pendiente; la persona usuaria abre la fuente con su propio clic
+  // en los enlaces reales de la tarjeta y fija el estado a mano.
+  // ---------------------------------------------------------------
+
+  var btnGuided = document.getElementById('btn-guided');
+  var guidedStatusEl = document.getElementById('guided-status');
+  var floatingBar = document.getElementById('floating-guided');
+  var floatingCount = document.getElementById('floating-guided-count');
+  var btnGuidedFloat = document.getElementById('btn-guided-float');
+  btnGuidedFloat.addEventListener('click', function () { btnGuided.click(); });
+
+  function orderedCitations() {
+    return citations.filter(function (c) { return c.type === 'normativa'; })
+      .concat(citations.filter(function (c) { return c.type === 'jurisprudencia'; }))
+      .concat(citations.filter(function (c) { return c.type === 'doctrina'; }));
+  }
+
+  // Si hay citas marcadas con el checkbox, la verificación guiada recorre
+  // solo esas; si no hay ninguna marcada, recorre todas las pendientes.
+  function targetCitations() {
+    var pending = orderedCitations().filter(function (c) { return c.status === 'pendiente'; });
+    var selected = pending.filter(function (c) { return c.selected; });
+    return selected.length ? selected : pending;
+  }
+
+  var selectAllCheck = document.getElementById('select-all-pending');
+  var selectionCountEl = document.getElementById('selection-count');
+
+  function updateSelectionUI() {
+    var pending = citations.filter(function (c) { return c.status === 'pendiente'; });
+    var selected = pending.filter(function (c) { return c.selected; });
+    selectAllCheck.checked = pending.length > 0 && selected.length === pending.length;
+    selectAllCheck.indeterminate = selected.length > 0 && selected.length < pending.length;
+    selectionCountEl.textContent = selected.length ? selected.length + ' seleccionada' + (selected.length === 1 ? '' : 's') : '';
+  }
+
+  selectAllCheck.addEventListener('change', function () {
+    var checked = selectAllCheck.checked;
+    citations.forEach(function (c) { if (c.status === 'pendiente') c.selected = checked; });
+    renderAll();
+  });
+
+  // Marca que la fuente de esta cita se abrió al menos una vez, sin
+  // decidir nada sobre el resultado: eso sigue siendo elección de quien
+  // revisa. Actualiza la etiqueta de la tarjeta sin rehacer todo el render.
+  function markOpened(cit, link) {
+    cit.opened = true;
+    cit.sourceLabel = link ? link.label : cit.sourceLabel;
+    cit.sourceUrl = link ? link.href : cit.sourceUrl;
+    cit.consultedAt = new Date().toLocaleString('es-UY');
+    var card = document.querySelector('[data-cid="' + cit.id + '"]');
+    var tag = card && card.querySelector('.opened-tag');
+    if (tag) tag.style.display = '';
+    var source = card && card.querySelector('.source-input');
+    if (source) source.value = cit.sourceUrl;
+    var meta = card && card.querySelector('.audit-meta');
+    if (meta) meta.textContent = 'Última apertura registrada: ' + cit.consultedAt + (cit.sourceLabel ? ' (' + cit.sourceLabel + ')' : '');
+  }
+
+  function clearGuidedHighlight() {
+    var prev = document.querySelector('.citation-card.current');
+    if (prev) prev.classList.remove('current');
+  }
+
+  function highlightCard(cit) {
+    var el = document.querySelector('[data-cid="' + cit.id + '"]');
+    if (el) {
+      el.classList.add('current');
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  }
+
+  function resetGuided() {
+    guidedActive = false;
+    guidedCurrentId = null;
+    guidedTotal = 0;
+    guidedSkipped = {};
+    guidedList = [];
+    clearGuidedHighlight();
+    btnGuided.textContent = 'Iniciar verificación guiada';
+    guidedStatusEl.textContent = '';
+    floatingBar.style.display = 'none';
+  }
+
+  // El alcance de la ronda (guidedList) queda fijo al iniciar: si se marcan
+  // los estados de las citas seleccionadas, la ronda no debe "derramarse"
+  // hacia el resto de las pendientes no seleccionadas.
+  function remainingGuided() {
+    return guidedList
+      .map(function (id) { return citations.filter(function (c) { return c.id === id; })[0]; })
+      .filter(function (c) { return c && c.status === 'pendiente' && !guidedSkipped[c.id]; });
+  }
+
+  // markSkip: true cuando el usuario pide pasar a la siguiente sin haber
+  // cambiado el estado de la tarjeta actual (se salta esa cita por ahora,
+  // sigue pendiente); false cuando avanza porque ya se fijó un estado.
+  function advanceGuided(markSkip) {
+    if (markSkip && guidedCurrentId != null) guidedSkipped[guidedCurrentId] = true;
+    clearGuidedHighlight();
+    var remaining = remainingGuided();
+    if (!remaining.length) {
+      guidedActive = false;
+      guidedCurrentId = null;
+      btnGuided.textContent = 'Iniciar verificación guiada';
+      guidedStatusEl.textContent = citations.length ? 'No quedan citas por revisar en esta ronda.' : '';
+      floatingBar.style.display = 'none';
+      return;
+    }
+    var cit = remaining[0];
+    guidedCurrentId = cit.id;
+    var doneCount = guidedTotal - remaining.length + 1;
+    highlightCard(cit);
+    var msg = 'Revisando cita ' + doneCount + ' de ' + guidedTotal + ' · quedan ' + (remaining.length - 1) + '. Haga clic en el botón de color de la tarjeta resaltada para abrir la fuente y, tras mirarla, fije el estado para pasar a la siguiente.';
+    guidedStatusEl.textContent = msg;
+    btnGuided.textContent = 'Siguiente ▶';
+    floatingCount.textContent = 'Cita ' + doneCount + ' de ' + guidedTotal;
+    floatingBar.style.display = 'flex';
+  }
+
+  btnGuided.addEventListener('click', function () {
+    if (!guidedActive) {
+      guidedActive = true;
+      guidedSkipped = {};
+      guidedList = targetCitations().map(function (c) { return c.id; });
+      guidedTotal = guidedList.length;
+      advanceGuided(false);
+    } else {
+      advanceGuided(true);
+    }
+  });
+
+  function addManualCitation() {
+    var raw = manualText.value.trim();
+    if (!raw) { showToast('Escriba la referencia que desea agregar.'); manualText.focus(); return; }
+    var labels = { normativa: 'Normativa (manual)', jurisprudencia: 'Jurisprudencia (manual)', doctrina: 'Doctrina (manual)' };
+    var cit = prepareCitation({
+      type: manualType.value,
+      subtype: labels[manualType.value],
+      kind: 'manual',
+      raw: raw,
+      query: raw,
+      status: 'pendiente',
+      note: '',
+      selected: false,
+      opened: false,
+      manual: true,
+      occurrences: 1,
+      id: ++seq
+    });
+    citations.push(cit);
+    manualText.value = '';
+    resetGuided();
+    summarySection.style.display = '';
+    resultsSection.style.display = '';
+    reportSection.style.display = '';
+    renderAll();
+    var card = document.querySelector('[data-cid="' + cit.id + '"]');
+    if (card) card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+
+  btnAddManual.addEventListener('click', addManualCitation);
+  manualText.addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') { e.preventDefault(); addManualCitation(); }
+  });
+
+  btnExtract.addEventListener('click', function () {
+    var text = textarea.value;
+    if (!text.trim()) { setFileStatus('Pegue o cargue un texto antes de extraer citas.', true); return; }
+
+    var norm = extractNormativa(text).map(function (c) { c.type = 'normativa'; c.status = 'pendiente'; c.note = ''; c.selected = false; c.opened = false; c.id = ++seq; return c; });
+    var juris = extractJurisprudencia(text).map(function (c) { c.type = 'jurisprudencia'; c.status = 'pendiente'; c.note = ''; c.selected = false; c.opened = false; c.id = ++seq; return c; });
+    var doc = extractDoctrina(text).map(function (c) { c.type = 'doctrina'; c.status = 'pendiente'; c.note = ''; c.selected = false; c.opened = false; c.id = ++seq; return c; });
+
+    citations = norm.concat(juris, doc);
+    resetGuided();
+
+    summarySection.style.display = citations.length ? '' : 'none';
+    resultsSection.style.display = '';
+    reportSection.style.display = citations.length ? '' : 'none';
+
+    renderAll();
+
+    if (!citations.length) {
+      document.getElementById('cards-normativa').innerHTML = '';
+      document.getElementById('cards-jurisprudencia').innerHTML = '';
+      document.getElementById('cards-doctrina').innerHTML = '';
+      ['cards-normativa', 'cards-jurisprudencia', 'cards-doctrina'].forEach(function (id) {
+        var el = document.getElementById(id);
+        var empty = document.createElement('div');
+        empty.className = 'empty-state';
+        empty.textContent = 'No se detectaron citas reconocibles. Revise el texto o marque manualmente lo que corresponda cotejar.';
+        el.appendChild(empty);
+      });
+    }
+  });
+
+  // ---------------------------------------------------------------
+  // Consulta automática contra IMPO y BJN
+  // ---------------------------------------------------------------
+
+  var autoAbort = null;
+
+  function cancelAutomatic() {
+    if (autoAbort) autoAbort.abort();
+    autoAbort = null;
+    btnAuto.disabled = false;
+    btnAutoCancel.hidden = true;
+    autoStatus.textContent = 'Consulta automática cancelada.';
+  }
+
+  function renderAutomaticResults(citas) {
+    autoOutput.style.display = 'block';
+    if (!citas.length) {
+      autoOutput.innerHTML = '<div class="empty-state">No se encontraron citas legales reconocibles en el texto.</div>';
+      return;
+    }
+    var rows = citas.map(function (c) {
+      var label = ESTADO_LABEL[c.estado] || c.estado || 'Sin estado';
+      var detail = c.url
+        ? '<a href="' + escapeHtml(c.url) + '" target="_blank" rel="noopener noreferrer">' + escapeHtml(c.detalle || 'Abrir fuente') + '</a>'
+        : escapeHtml(c.detalle || '');
+      return '<tr>'
+        + '<td>' + escapeHtml(c.cita || '') + '</td>'
+        + '<td>' + escapeHtml(c.fuente || '') + '</td>'
+        + '<td><span class="estado-badge estado-' + escapeHtml(c.estado || 'no_verificable') + '">' + escapeHtml(label) + '</span></td>'
+        + '<td>' + detail + '</td>'
+        + '</tr>';
+    }).join('');
+    autoOutput.innerHTML = '<table class="citas-table" aria-label="Resultado de la verificación automática">'
+      + '<thead><tr><th>Cita</th><th>Fuente</th><th>Estado</th><th>Detalle</th></tr></thead>'
+      + '<tbody>' + rows + '</tbody></table>';
+  }
+
+  async function verificarAutomaticamente() {
+    var texto = textarea.value.trim();
+    if (!texto) {
+      autoStatus.textContent = 'Pegue o cargue un texto antes de verificar.';
+      textarea.focus();
+      return;
+    }
+
+    if (autoAbort) autoAbort.abort();
+    autoAbort = new AbortController();
+    btnAuto.disabled = true;
+    btnAutoCancel.hidden = false;
+    autoOutput.style.display = 'none';
+    autoStatus.textContent = 'Analizando el texto...';
+
+    try {
+      var r = await fetch('/api/verificar', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ texto: texto }),
+        signal: autoAbort.signal
+      });
+      var init = await r.json();
+      if (!r.ok || !init.job_id) throw new Error(init.error || 'No se pudo iniciar la verificación.');
+      var data = await pollJob(init.job_id, {
+        signal: autoAbort.signal,
+        onProgress: function (ms) {
+          autoStatus.textContent = 'Verificando contra IMPO y BJN... (' + Math.round(ms / 1000) + 's)';
+        }
+      });
+      renderAutomaticResults(data.citas || []);
+      autoStatus.textContent = (data.citas || []).length + ' cita(s) procesada(s) automáticamente.';
+    } catch (e) {
+      if (e.name === 'AbortError') return;
+      autoStatus.textContent = 'Error: ' + (e.message || 'No se pudo completar la consulta.');
+      autoOutput.style.display = 'block';
+      autoOutput.innerHTML = '<div class="citation-warning">' + escapeHtml(autoStatus.textContent) + '</div>';
+    } finally {
+      btnAuto.disabled = false;
+      btnAutoCancel.hidden = true;
+      autoAbort = null;
+    }
+  }
+
+  btnAuto.addEventListener('click', verificarAutomaticamente);
+  btnAutoCancel.addEventListener('click', cancelAutomatic);
+
+  // ---------------------------------------------------------------
+  // Report
+  // ---------------------------------------------------------------
+
+  function buildReport() {
+    var lines = [];
+    var now = new Date();
+    lines.push('COTEJO DE CITAS | ' + now.toLocaleDateString('es-UY') + ' ' + now.toLocaleTimeString('es-UY'));
+    lines.push('Citas detectadas: ' + citations.length);
+    lines.push('');
+    [['normativa', 'NORMATIVA'], ['jurisprudencia', 'JURISPRUDENCIA'], ['doctrina', 'DOCTRINA']].forEach(function (pair) {
+      var items = citations.filter(function (c) { return c.type === pair[0]; });
+      lines.push(pair[1] + ' (' + items.length + ')');
+      if (!items.length) lines.push('  (sin citas detectadas)');
+      items.forEach(function (c) {
+        prepareCitation(c);
+        lines.push('  * [' + statusLabel(c.status) + '] ' + c.raw);
+        if (c.occurrences > 1) lines.push('    Apariciones agrupadas: ' + c.occurrences);
+        if (c.query && c.query !== c.raw) lines.push('    Consulta utilizada: ' + c.query);
+        lines.push('    Fuente consultada: ' + (c.sourceUrl || c.sourceLabel || '(sin registrar)'));
+        lines.push('    Fecha de consulta: ' + (c.consultedAt || '(sin registrar)'));
+        lines.push('    Controles: fuente localizada=' + (c.audit.sourceLocated ? 'sí' : 'no') + '; identidad=' + (c.audit.identityMatch ? 'sí' : 'no') + '; contenido=' + (c.audit.contentMatch ? 'sí' : 'no') + (c.type === 'normativa' ? '; vigencia o texto temporal=' + (c.audit.validityChecked ? 'sí' : 'no') : ''));
+        if (c.note) lines.push('    Nota: ' + c.note);
+      });
+      lines.push('');
+    });
+    lines.push('Nota metodológica: cada estado fue fijado manualmente después de consultar la fuente. La herramienta registra el cotejo, pero no certifica por sí sola la existencia, la vigencia ni el sentido jurídico de la cita.');
+    return lines.join('\n');
+  }
+
+  function exportData() {
+    return {
+      herramienta: 'Cotejo de citas jurídicas (Uruguay)',
+      generado: new Date().toISOString(),
+      advertencia: 'Los estados fueron fijados manualmente por la persona revisora.',
+      citas: citations.map(function (c) {
+        prepareCitation(c);
+        return {
+          categoria: c.type,
+          subtipo: c.subtype,
+          cita: c.raw,
+          consulta: c.query,
+          estado: c.status,
+          apariciones: c.occurrences,
+          fuente: c.sourceUrl || c.sourceLabel || '',
+          fecha_consulta: c.consultedAt || '',
+          controles: c.audit,
+          nota: c.note || '',
+          alta_manual: !!c.manual
+        };
+      })
+    };
+  }
+
+  function downloadTextFile(filename, data, mime) {
+    try {
+      var blob = new Blob([data], { type: mime || 'text/plain;charset=utf-8' });
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+      showToast('Archivo descargado.');
+    } catch (e) {
+      showTextFallback(data, 'No se pudo descargar. Copie el contenido');
+    }
+  }
+
+  var toast = document.getElementById('toast');
+  function showToast(msg) {
+    toast.textContent = msg;
+    toast.classList.add('show');
+    setTimeout(function () { toast.classList.remove('show'); }, 2200);
+  }
+
+  // Respaldo cuando no se puede copiar ni descargar solo: un modal propio
+  // (no window.prompt, que junto con los demás diálogos nativos del
+  // navegador puede estar bloqueado dentro del artefacto) con el texto ya
+  // seleccionado para copiar a mano con Ctrl+C.
+  var textModal = document.getElementById('text-modal');
+  var textModalArea = document.getElementById('text-modal-area');
+  var textModalTitle = document.getElementById('text-modal-title');
+  document.getElementById('text-modal-close').addEventListener('click', function () {
+    textModal.style.display = 'none';
+  });
+  textModal.addEventListener('click', function (e) {
+    if (e.target === textModal) textModal.style.display = 'none';
+  });
+
+  function showTextFallback(text, title) {
+    textModalTitle.textContent = title || 'Copie el texto';
+    textModalArea.value = text;
+    textModal.style.display = 'flex';
+    textModalArea.focus();
+    textModalArea.select();
+  }
+
+  // Intenta copiar con la API moderna; si no está disponible o falla,
+  // intenta el método clásico (execCommand, más tolerante en entornos
+  // restringidos); si tampoco funciona, muestra el modal de respaldo.
+  function copyText(text, successMsg) {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(function () {
+        showToast(successMsg);
+      }).catch(function () {
+        tryExecCommandCopy(text, successMsg);
+      });
+    } else {
+      tryExecCommandCopy(text, successMsg);
+    }
+  }
+
+  function tryExecCommandCopy(text, successMsg) {
+    var ok = false;
+    try {
+      var ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.focus();
+      ta.select();
+      ok = document.execCommand('copy');
+      document.body.removeChild(ta);
+    } catch (e) { ok = false; }
+    if (ok) showToast(successMsg);
+    else showTextFallback(text, 'Copie el informe');
+  }
+
+  document.getElementById('btn-copy').addEventListener('click', function () {
+    copyText(buildReport(), 'Informe copiado.');
+  });
+
+  document.getElementById('btn-download').addEventListener('click', function () {
+    var report = buildReport();
+    downloadTextFile('cotejo-citas-' + new Date().toISOString().slice(0, 10) + '.txt', report, 'text/plain;charset=utf-8');
+  });
+
+  document.getElementById('btn-download-json').addEventListener('click', function () {
+    var json = JSON.stringify(exportData(), null, 2);
+    downloadTextFile('cotejo-citas-' + new Date().toISOString().slice(0, 10) + '.json', json, 'application/json;charset=utf-8');
+  });
+})();
 </script>
-</body>
-</html>
+</body></html>
