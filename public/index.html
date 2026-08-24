@@ -818,7 +818,7 @@ function compartirBusqueda() {
 // Esto evita el timeout de 30s de Render en plan gratuito.
 
 // pollJob con soporte de cancelación via AbortSignal
-async function pollJob(jobId, { onProgress, maxWaitMs = 120000, intervalMs = 2000, signal } = {}) {
+async function pollJob(jobId, { onProgress, maxWaitMs = 180000, intervalMs = 2000, signal } = {}) {
   const deadline = Date.now() + maxWaitMs;
   let elapsed = 0;
   while (Date.now() < deadline) {
@@ -835,7 +835,7 @@ async function pollJob(jobId, { onProgress, maxWaitMs = 120000, intervalMs = 200
     if (data.status === 'done') return data;
     throw new Error('Estado desconocido: ' + data.status);
   }
-  throw new Error('La búsqueda tardó demasiado. Intentá de nuevo.');
+  throw new Error('El BJN está tardando más de lo habitual. La consulta quedó limitada para no bloquear la aplicación. Intentá nuevamente en unos segundos.');
 }
 
 // AbortController activo para la búsqueda en curso

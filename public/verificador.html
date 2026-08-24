@@ -867,7 +867,7 @@
   async function pollJob(jobId, options) {
     options = options || {};
     var onProgress = options.onProgress;
-    var maxWaitMs = options.maxWaitMs || 120000;
+    var maxWaitMs = options.maxWaitMs || 180000;
     var intervalMs = options.intervalMs || 2000;
     var signal = options.signal;
     var deadline = Date.now() + maxWaitMs;
@@ -885,7 +885,7 @@
       if (data.status === 'done') return data;
       throw new Error('Estado desconocido: ' + data.status);
     }
-    throw new Error('La verificación tardó demasiado. Intentá de nuevo.');
+    throw new Error('La consulta está tardando más de lo habitual. El sistema la limitó para no bloquearse; intentá nuevamente en unos segundos.');
   }
 
   textarea.addEventListener('input', function () {
