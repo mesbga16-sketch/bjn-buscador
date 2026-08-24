@@ -671,14 +671,14 @@
   </header>
 
   <div class="alcance">
-    <strong>Alcance.</strong> Esta herramienta extrae citas del texto y compone enlaces de búsqueda hacia fuentes públicas (BJN, IMPO, vLex Uruguay). No consulta esas fuentes por sí misma ni certifica de forma automática la existencia de una cita: cada resultado debe abrirse y cotejarse por quien redacta. El estado de cada cita (verificada, con diferencias, no localizada) lo fija el usuario luego de revisar la fuente, no la herramienta. Una cita real puede además estar aplicada de modo impropio al caso; esto tampoco lo evalúa la herramienta. Admite .txt, .pdf (con capa de texto; los escaneos sin OCR no se pueden leer) y .docx (Word moderno; el .doc antiguo debe guardarse como .docx). El archivo se procesa en el navegador y no se envía a ningún servidor. La lectura de PDF y DOCX carga las bibliotecas públicas fijadas desde cdnjs; el contenido del usuario no se envía a ese servicio.
+    <strong>Alcance.</strong> Esta herramienta extrae citas del texto y compone enlaces de búsqueda hacia fuentes públicas (BJN, IMPO, vLex Uruguay). No consulta esas fuentes por sí misma ni certifica de forma automática la existencia de una cita: cada resultado debe abrirse y cotejarse por quien redacta. El estado de cada cita (verificada, con diferencias, no localizada) lo fija el usuario luego de revisar la fuente, no la herramienta. Una cita real puede además estar aplicada de modo impropio al caso; esto tampoco lo evalúa la herramienta. Admite .txt, .pdf (con extracción directa y OCR local para escaneos) y .docx (Word moderno; el .doc antiguo debe guardarse como .docx). El archivo se procesa en el navegador y no se envía a ningún servidor. La lectura de PDF y DOCX y el OCR cargan bibliotecas públicas fijadas; el contenido del usuario no se envía a esos servicios.
   </div>
 
   <div class="howto">
     <p class="howto-title">Cómo se usa</p>
-    <p class="howto-privacy">El contenido se procesa en su navegador: el texto y los archivos (.txt, .pdf, .docx) se leen en su computadora y no se suben a ningún servidor. Para PDF y DOCX, el navegador debe cargar las bibliotecas públicas fijadas; el contenido del archivo no se envía.</p>
+    <p class="howto-privacy">El contenido se procesa en su navegador: el texto y los archivos (.txt, .pdf, .docx) se leen en su computadora y no se suben a ningún servidor. Los PDF escaneados se convierten en imágenes y se leen con OCR local; el reconocimiento puede tardar varios minutos según la cantidad de páginas. El contenido del archivo no se envía.</p>
     <ol>
-      <li>Pegue el texto (o cargue un .txt, .pdf o .docx) y presione <strong>Extraer citas</strong>.</li>
+      <li>Pegue el texto (o cargue un .txt, .pdf o .docx) y presione <strong>Extraer citas</strong>. Si el PDF es escaneado, el OCR se inicia automáticamente cuando no se detecta una capa de texto.</li>
       <li>Revise lo detectado. Si falta una referencia, incorpórela con <strong>Agregar cita manual</strong>.</li>
       <li>Abra la fuente desde la tarjeta. Puede ajustar antes la consulta de búsqueda sin alterar la cita original.</li>
       <li>Marque los controles de identidad, contenido y fuente consultada. El estado <strong>Verificada</strong> se habilita cuando esos controles están completos.</li>
@@ -818,6 +818,10 @@
   src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"
   integrity="sha384-nFoSjZIoH3CCp8W639jJyQkuPHinJ2NHe7on1xvlUA7SuGfJAfvMldrsoAVm6ECz"
   crossorigin="anonymous"></script>
+<script
+  src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js"
+  integrity="sha384-GJqSu7vueQ9qN0E9yLPb3Wtpd7OrgK8KmYzC8T1IysG1bcvxvIO4qtYR/D3A991F"
+  crossorigin="anonymous"></script>
 
 <script>
 (function () {
@@ -863,6 +867,60 @@
   var guidedTotal = 0;
   var guidedSkipped = {};
   var guidedList = [];
+  var ocrWorker = null;
+  var ocrRun = 0;
+  var OCR_MAX_PAGES = 40;
+  var OCR_RENDER_SCALE = 1.35;
+
+  function reportOcrProgress(info) {
+    if (!info || !info.status) return;
+    var progress = typeof info.progress === 'number' ? Math.round(info.progress * 100) : null;
+    var suffix = progress == null ? '' : ' ' + progress + '%';
+    setFileStatus('Preparando OCR en español: ' + info.status + suffix + '…');
+  }
+
+  function normalizeOcrText(text) {
+    return String(text || '')
+      .replace(/\bN\s*[\*º°oO](?=\s|\d)/g, 'N°')
+      .replace(/\bN\s*[º°](?=\s|\d)/g, 'N°');
+  }
+
+  async function getOcrWorker() {
+    if (!window.Tesseract || typeof window.Tesseract.createWorker !== 'function') {
+      throw new Error('El motor OCR no está disponible en esta sesión.');
+    }
+    if (!ocrWorker) {
+      ocrWorker = await window.Tesseract.createWorker('spa', 1, { logger: reportOcrProgress });
+    }
+    return ocrWorker;
+  }
+
+  async function ocrPdf(doc, file, run) {
+    var worker = await getOcrWorker();
+    var pageCount = Math.min(doc.numPages, OCR_MAX_PAGES);
+    var ocrPages = [];
+    for (var pageNum = 1; pageNum <= pageCount; pageNum++) {
+      if (run !== ocrRun) throw new DOMException('Cancelado', 'AbortError');
+      setFileStatus('OCR local: leyendo página ' + pageNum + ' de ' + pageCount + ' de ' + file.name + '…');
+      var page = await doc.getPage(pageNum);
+      var viewport = page.getViewport({ scale: OCR_RENDER_SCALE });
+      var canvas = document.createElement('canvas');
+      canvas.width = Math.ceil(viewport.width);
+      canvas.height = Math.ceil(viewport.height);
+      var context = canvas.getContext('2d', { alpha: false });
+      await page.render({ canvasContext: context, viewport: viewport }).promise;
+      var result = await worker.recognize(canvas);
+      ocrPages.push(result && result.data && result.data.text ? result.data.text : '');
+      canvas.width = 1;
+      canvas.height = 1;
+    }
+    if (run !== ocrRun) throw new DOMException('Cancelado', 'AbortError');
+    var suffix = doc.numPages > pageCount ? ' — OCR aplicado a ' + pageCount + ' de ' + doc.numPages + ' páginas' : '';
+    setLoadedText(normalizeOcrText(ocrPages.join('\n\n')), 'OCR listo: ' + file.name + ' (' + doc.numPages + (doc.numPages === 1 ? ' página' : ' páginas') + ')' + suffix);
+    if (doc.numPages > pageCount) {
+      setFileStatus('OCR listo: se procesaron ' + pageCount + ' de ' + doc.numPages + ' páginas para cuidar la memoria del dispositivo.', false);
+    }
+  }
 
   async function pollJob(jobId, options) {
     options = options || {};
@@ -919,6 +977,7 @@
 
   function readAsPdf(f) {
     if (!window.pdfjsLib) { setFileStatus('El lector de PDF no está disponible en esta sesión.', true); return; }
+    var run = ocrRun;
     setFileStatus('Extrayendo texto de ' + f.name + '…');
     var reader = new FileReader();
     reader.onload = function (e) {
@@ -927,6 +986,7 @@
         var chain = Promise.resolve();
         var _loop = function (pageNum) {
           chain = chain.then(function () {
+            if (run !== ocrRun) throw new DOMException('Cancelado', 'AbortError');
             return doc.getPage(pageNum).then(function (page) {
               return page.getTextContent().then(function (tc) {
                 pages[pageNum - 1] = tc.items.map(function (it) { return it.str; }).join(' ');
@@ -936,13 +996,35 @@
         };
         for (var i = 1; i <= doc.numPages; i++) _loop(i);
         chain.then(function () {
-          setLoadedText(pages.join('\n\n'), 'Cargado: ' + f.name + ' (' + doc.numPages + (doc.numPages === 1 ? ' página' : ' páginas') + ')');
+          if (run !== ocrRun) return;
+          var directText = pages.join('\n\n');
+          var note = 'Cargado: ' + f.name + ' (' + doc.numPages + (doc.numPages === 1 ? ' página' : ' páginas') + ')';
+          if (directText.replace(/\s/g, '').length >= 50) {
+            setLoadedText(directText, note);
+            return;
+          }
+          if (!window.Tesseract) {
+            setLoadedText(directText, note + ' — el motor OCR no está disponible; revise la conexión o convierta el PDF a texto');
+            return;
+          }
+          setFileStatus('PDF sin capa de texto. Iniciando OCR local en español; el archivo no se envía…');
+          ocrPdf(doc, f, run).catch(function (err) {
+            if (err && err.name === 'AbortError') return;
+            if (run !== ocrRun) return;
+            setLoadedText(directText, note + ' — OCR no disponible: ' + (err && err.message ? err.message : 'error de reconocimiento'));
+          });
+        }).catch(function (err) {
+          if (err && err.name === 'AbortError') return;
+          if (run !== ocrRun) return;
+          setFileStatus('No se pudo extraer el texto del PDF: ' + (err && err.message ? err.message : 'archivo dañado o protegido') + '.', true);
         });
       }).catch(function (err) {
+        if (err && err.name === 'AbortError') return;
+        if (run !== ocrRun) return;
         setFileStatus('No se pudo leer el PDF: ' + (err && err.message ? err.message : 'archivo dañado o protegido') + '.', true);
       });
     };
-    reader.onerror = function () { setFileStatus('No se pudo leer ' + f.name + '.', true); };
+    reader.onerror = function () { if (run === ocrRun) setFileStatus('No se pudo leer ' + f.name + '.', true); };
     reader.readAsArrayBuffer(f);
   }
 
@@ -965,6 +1047,7 @@
   fileInput.addEventListener('change', function () {
     var f = fileInput.files[0];
     if (!f) return;
+    ocrRun += 1;
     var name = f.name.toLowerCase();
     if (/\.txt$/.test(name)) readAsTxt(f);
     else if (/\.pdf$/.test(name)) readAsPdf(f);
@@ -976,6 +1059,7 @@
   });
 
   btnClear.addEventListener('click', function () {
+    ocrRun += 1;
     textarea.value = '';
     charCount.textContent = '0 caracteres';
     setFileStatus('');
@@ -1104,6 +1188,7 @@
       var right = text.slice(m.end, Math.min(text.length, m.end + 45));
       var context = left + right;
       if (!/\bdecreto(?:s)?\b/i.test(context)) return;
+      if (/\b(?:sentencia|fallo|auto|resoluci[oó]n|SCJ|TAT|TAC|TAP|TCA|SEF|DFA)\b/i.test(context)) return;
       m.tag = 'Número de decreto contextual';
       m.kind = 'decreto';
       m.numGroup = 1;
