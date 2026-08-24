@@ -10,7 +10,7 @@ v12: hardening de scraping - timeouts explícitos, try/except granulares,
 
 from flask import Flask, request, jsonify, send_from_directory
 import re, os, uuid, threading, queue, time, unicodedata, html, subprocess
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 from urllib.parse import parse_qs, quote_plus, unquote, urlencode, urlparse
 import httpx
 from bs4 import BeautifulSoup
@@ -330,9 +330,13 @@ def _playwright_worker():
             return False
         return _bjn_tribunal_matches(cita, resultado)
 
-    def _buscar_bjn_identificador(cita):
-        """Busca en las primeras páginas y devuelve la primera coincidencia exacta."""
+    _BJN_VERIFY_MAX_SECONDS = int(os.environ.get('BJN_VERIFY_MAX_SECONDS', '150'))
+
+    def _buscar_bjn_identificador(cita, deadline=None):
+        """Busca en las primeras páginas con un límite global por verificación."""
         for query in _bjn_query_variants(cita):
+            if deadline is not None and time.monotonic() >= deadline:
+                return None, None
             raw, pagination = do_search({
                 'texto': query,
                 'tipoBusqueda': 'FRASE_EXACTA',
@@ -340,6 +344,8 @@ def _playwright_worker():
                 '_verificacion_bjn': True,
             })
             for page_number in range(BJN_VERIFY_MAX_PAGES + 1):
+                if deadline is not None and time.monotonic() >= deadline:
+                    return None, None
                 coincidencia = next(
                     (
                         resultado for resultado in process_raw_results(raw)
@@ -354,14 +360,14 @@ def _playwright_worker():
                 raw, pagination = do_pagina('next')
         return None, None
 
-    def verificar_jurisprudencia(cita):
-        """Busca la sentencia por identificador canónico y revisa páginas adicionales."""
+    def verificar_jurisprudencia(cita, deadline=None):
+        """Busca la sentencia por identificador canónico con un límite de tiempo."""
         if not cita.get('anio') or not cita.get('numero'):
             return {**cita, 'fuente': 'BJN', 'estado': 'no_verificable',
                     'detalle': 'La referencia no contiene número y año suficientes para consultar el BJN.',
                     'url': BJN_SIMPLE}
         try:
-            coincidencia, query = _buscar_bjn_identificador(cita)
+            coincidencia, query = _buscar_bjn_identificador(cita, deadline=deadline)
         except Exception as exc:
             return {**cita, 'fuente': 'BJN', 'estado': 'no_verificable',
                     'detalle': f'No se pudo consultar el BJN: {exc}', 'url': BJN_SIMPLE}
@@ -369,6 +375,10 @@ def _playwright_worker():
             return {**cita, 'fuente': 'BJN', 'estado': 'verificada',
                     'detalle': coincidencia.get('titulo', ''), 'url': BJN_SIMPLE,
                     'consulta_bjn': query}
+        if deadline is not None and time.monotonic() >= deadline:
+            return {**cita, 'fuente': 'BJN', 'estado': 'no_verificable',
+                    'detalle': 'El BJN no respondió dentro del tiempo disponible; no se afirma que la sentencia no exista.',
+                    'url': BJN_SIMPLE}
         return {**cita, 'fuente': 'BJN', 'estado': 'no_encontrada',
                 'detalle': 'No se encontró una sentencia con ese identificador en las páginas consultadas del BJN.',
                 'url': BJN_SIMPLE}
@@ -376,11 +386,17 @@ def _playwright_worker():
     def do_verificar(texto):
         citas = extraer_citas(texto)
         resultados = []
+        verify_deadline = time.monotonic() + _VERIFY_MAX_SECONDS
         for cita in citas:
-            if cita['tipo'] == 'jurisprudencia':
-                resultados.append(verificar_jurisprudencia(cita))
+            if time.monotonic() >= verify_deadline:
+                fuente = 'BJN' if cita['tipo'] == 'jurisprudencia' else 'IMPO'
+                resultados.append({**cita, 'fuente': fuente, 'estado': 'no_verificable',
+                                   'detalle': 'Se alcanzó el tiempo máximo de verificación; no se afirma que la referencia no exista.',
+                                   'url': BJN_SIMPLE if fuente == 'BJN' else None})
+            elif cita['tipo'] == 'jurisprudencia':
+                resultados.append(verificar_jurisprudencia(cita, deadline=verify_deadline))
             else:
-                resultados.append(verificar_impo(cita))
+                resultados.append(verificar_impo(cita, deadline=verify_deadline))
         return resultados
 
     # ── Loop principal del worker ─────────────────────────────────────────────
@@ -557,8 +573,8 @@ def _curl_get(url: str, timeout: int = 20):
     return httpx.Response(status, content=body, request=httpx.Request('GET', url))
 
 
-def _impo_search_links(cita: dict) -> list[dict]:
-    """Lee el RSS público de Bing y devuelve solo URLs canónicas de IMPO."""
+def _impo_search_links(cita: dict, time_budget: int = 10) -> list[dict]:
+    """Lee resultados públicos de Bing con un presupuesto corto y devuelve URLs canónicas."""
     path_prefix = {
         'ley': '/bases/leyes/',
         'decreto': '/bases/decretos/',
@@ -566,6 +582,7 @@ def _impo_search_links(cita: dict) -> list[dict]:
     }.get(cita.get('tipo'), '')
     number = re.sub(r'\D', '', str(cita.get('numero') or ''))
     links = []
+    deadline = time.monotonic() + max(1, time_budget)
     for search_query in _impo_search_queries(cita):
         query = quote_plus(search_query)
         endpoints = [
@@ -573,7 +590,10 @@ def _impo_search_links(cita: dict) -> list[dict]:
             f'https://www.bing.com/search?q={query}',
         ]
         for endpoint in endpoints:
-            response = _curl_get(endpoint, timeout=20)
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                return links
+            response = _curl_get(endpoint, timeout=max(1, min(8, int(remaining))))
             if response is None or response.status_code != 200:
                 continue
             raw_links = re.findall(r'<link>(https?://[^<]+)</link>', response.text, re.IGNORECASE)
@@ -631,45 +651,69 @@ def _impo_get_candidate(cita: dict, anio: int):
     return None
 
 
-def _resolver_impo_por_numero(cita: dict) -> list[dict]:
-    """Resuelve el año de una norma sin año mediante páginas públicas de IMPO.
+_IMPO_RESOLVE_MAX_SECONDS = int(os.environ.get('IMPO_RESOLVE_MAX_SECONDS', '30'))
+_VERIFY_MAX_SECONDS = int(os.environ.get('VERIFY_MAX_SECONDS', '150'))
 
-    La búsqueda se hace en bloques recientes y se detiene en el primer bloque que
-    contenga coincidencias. La respuesta solo se considera positiva si la página
-    devuelve el tipo y el número de la norma, no solo un HTTP 200.
-    """
+
+def _resolver_impo_por_numero(cita: dict, deadline: float | None = None) -> dict:
+    """Resuelve el año de una norma sin bloquear el worker por un sondeo histórico."""
     cache_key = (cita.get('tipo'), cita.get('numero'))
     now = time.monotonic()
     with _IMPO_RESOLVE_LOCK:
         cached = _IMPO_RESOLVE_CACHE.get(cache_key)
         if cached and now - cached['at'] < _IMPO_RESOLVE_CACHE_TTL:
-            return list(cached['matches'])
+            return {'matches': list(cached['matches']), 'complete': True}
 
-    matches = _impo_search_links(cita)
+    local_deadline = time.monotonic() + _IMPO_RESOLVE_MAX_SECONDS
+    if deadline is not None:
+        local_deadline = min(local_deadline, deadline)
+    links_budget = max(1, min(10, int(local_deadline - time.monotonic())))
+    matches = _impo_search_links(cita, time_budget=links_budget)
     if matches:
         with _IMPO_RESOLVE_LOCK:
             _IMPO_RESOLVE_CACHE[cache_key] = {'at': time.monotonic(), 'matches': list(matches)}
-        return matches
+        return {'matches': matches, 'complete': True}
 
     years = _impo_years_to_try(cita.get('numero'))
     matches = []
+    complete = True
     for start in range(0, len(years), _IMPO_RESOLVE_CHUNK):
+        remaining = local_deadline - time.monotonic()
+        if remaining <= 0:
+            complete = False
+            break
         chunk = years[start:start + _IMPO_RESOLVE_CHUNK]
-        with ThreadPoolExecutor(max_workers=9) as executor:
-            futures = [executor.submit(_impo_get_candidate, cita, anio) for anio in chunk]
+        executor = ThreadPoolExecutor(max_workers=9)
+        futures = [executor.submit(_impo_get_candidate, cita, anio) for anio in chunk]
+        try:
             for future in futures:
-                match = future.result()
+                remaining = local_deadline - time.monotonic()
+                if remaining <= 0:
+                    complete = False
+                    break
+                try:
+                    match = future.result(timeout=remaining)
+                except FuturesTimeoutError:
+                    complete = False
+                    break
+                except Exception:
+                    continue
                 if match:
                     matches.append(match)
-        if matches:
+        finally:
+            for future in futures:
+                future.cancel()
+            executor.shutdown(wait=False, cancel_futures=True)
+        if matches or not complete:
             break
 
-    with _IMPO_RESOLVE_LOCK:
-        _IMPO_RESOLVE_CACHE[cache_key] = {'at': time.monotonic(), 'matches': list(matches)}
-    return matches
+    if complete:
+        with _IMPO_RESOLVE_LOCK:
+            _IMPO_RESOLVE_CACHE[cache_key] = {'at': time.monotonic(), 'matches': list(matches)}
+    return {'matches': matches, 'complete': complete}
 
 
-def verificar_impo(cita: dict) -> dict:
+def verificar_impo(cita: dict, deadline: float | None = None) -> dict:
     """Consulta IMPO y resuelve el año cuando la cita no lo trae."""
     if cita.get('anio'):
         url = _impo_path(cita, cita['anio'])
@@ -690,7 +734,12 @@ def verificar_impo(cita: dict) -> dict:
         return {**cita, 'fuente': 'IMPO', 'estado': 'no_encontrada',
                 'detalle': 'IMPO no tiene registrada una norma con ese número y año.', 'url': url}
 
-    matches = _resolver_impo_por_numero(cita)
+    resolution = _resolver_impo_por_numero(cita, deadline=deadline)
+    matches = resolution['matches']
+    if not resolution['complete']:
+        return {**cita, 'fuente': 'IMPO', 'estado': 'no_verificable',
+                'detalle': 'IMPO no respondió dentro del tiempo disponible para resolver el año; no se afirma que la norma no exista.',
+                'url': matches[0]['url'] if matches else None}
     if len(matches) == 1 and cita.get('tipo') == 'decreto':
         resolved = matches[0]
         return {**cita, 'anio': resolved['anio'], 'fuente': 'IMPO',
