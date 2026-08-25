@@ -274,6 +274,7 @@
     flex-shrink: 0;
   }
   .btn-icon {
+    display: inline-block;
     padding: 5px 12px;
     font-size: 12px;
     border: 1px solid var(--borde);
@@ -289,6 +290,7 @@
     white-space: nowrap;
   }
   .btn-icon:hover { background: #f0f5ff; border-color: var(--azul-claro); }
+  a.btn-icon { color: var(--azul); text-decoration: none; }
   .detail-meta { font-size: 11px; color: var(--extracto); margin-top: 4px; }
 
   /* Status */
@@ -432,6 +434,7 @@
     <h1>Acceso no oficial a BJN - Base de Jurisprudencia Nacional</h1>
   </div>
   <nav class="header-links">
+    <a class="bjn-link" href="/" title="Volver a la página inicial">Inicio</a>
     <a class="bjn-link" href="/verificador" target="_blank" rel="noopener noreferrer">Verificador de citas legales</a>
     <a class="bjn-link" href="https://judiciadisticas-development.web.app/proyectos/anonimizacion" target="_blank" rel="noopener noreferrer">Anonimización</a>
     <a class="bjn-link" href="https://bjn.poderjudicial.gub.uy/" target="_blank" rel="noopener noreferrer">Abrir BJN original</a>
@@ -562,6 +565,8 @@
     <div class="results-header">
       <div class="results-count" id="results-count"></div>
       <div class="results-actions">
+          <a class="btn-icon" href="/" title="Volver a la página inicial">Inicio</a>
+          <button type="button" class="btn-icon" onclick="volverAlInicio()" title="Comenzar una nueva búsqueda">Nueva búsqueda</button>
           <button type="button" class="btn-icon" onclick="compartirBusqueda()" title="Copiar enlace a esta búsqueda">&#128279; Compartir</button>
       </div>
     </div>
@@ -817,6 +822,10 @@ function loadFromParams() {
   const payload = buildPayload();
   if (restoreCachedResults(payload)) return;
   buscar();
+}
+
+function volverAlInicio() {
+  window.location.assign(`${window.location.origin}${window.location.pathname}`);
 }
 
 function compartirBusqueda() {
