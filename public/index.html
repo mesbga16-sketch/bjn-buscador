@@ -61,12 +61,19 @@
   .search-heading { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; color: var(--azul); }
   .search-heading strong { font-size: 14px; }
   .search-heading span { color: var(--extracto); font-size: 12px; }
+  .search-top-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(300px, .85fr);
+    gap: 14px;
+    align-items: start;
+  }
   .search-main {
     display: flex;
     gap: 10px;
     align-items: flex-end;
   }
-  .search-main .field { flex: 1; }
+  .search-main .field { flex: 1; min-width: 0; }
+  .search-top-grid > #query-assistant { margin-top: 0; }
 
   .filters-row {
     display: grid;
@@ -510,6 +517,10 @@
   .local-file-result small { display: block; color: var(--extracto); margin-top: 3px; }
   .local-file-result mark { background: #fde047; padding: 0 2px; border-radius: 2px; }
 
+  @media (max-width: 900px) {
+    .search-top-grid { grid-template-columns: 1fr; }
+  }
+
   @media (max-width: 640px) {
     .instrucciones-grid { grid-template-columns: 1fr; }
     .tool-grid { grid-template-columns: 1fr 1fr; }
@@ -559,17 +570,52 @@
       <strong>Búsqueda principal</strong>
       <span>El texto a buscar es el único campo necesario.</span>
     </div>
-    <div class="search-main">
-      <div class="field">
-        <label for="s-texto">Texto a buscar</label>
-        <input type="text" id="s-texto"
-               placeholder="ej: despido abusivo, accidente laboral, responsabilidad estatal..."
-               autocomplete="off" aria-describedby="texto-ayuda"
-               onkeydown="if(event.key==='Enter') buscar()"
-               oninput="prepararNuevaBusqueda()">
-        <span id="texto-ayuda" class="sr-only">Ingresá palabras o una frase para consultar el texto de las sentencias.</span>
+    <div class="search-top-grid">
+      <div class="search-main">
+        <div class="field">
+          <label for="s-texto">Texto a buscar</label>
+          <input type="text" id="s-texto"
+                 placeholder="ej: despido abusivo, accidente laboral, responsabilidad estatal..."
+                 autocomplete="off" aria-describedby="texto-ayuda"
+                 onkeydown="if(event.key==='Enter') buscar()"
+                 oninput="prepararNuevaBusqueda()">
+          <span id="texto-ayuda" class="sr-only">Ingresá palabras o una frase para consultar el texto de las sentencias.</span>
+        </div>
+        <button type="button" class="btn btn-primary" onclick="buscar()" style="padding:8px 28px; align-self:flex-end;">Buscar</button>
       </div>
-      <button type="button" class="btn btn-primary" onclick="buscar()" style="padding:8px 28px; align-self:flex-end;">Buscar</button>
+
+      <!-- Asistente visible junto al buscador; sigue siendo opcional -->
+      <details class="tool-panel" id="query-assistant">
+        <summary class="optional-filter-summary">
+          <span>Asistente de consulta con IA (opcional)</span>
+          <span class="optional-badge">no decide ni reemplaza la búsqueda</span>
+        </summary>
+        <div class="tool-body">
+          <p class="tool-help"><strong>Elegí si querés usarlo.</strong> Es una ayuda para transformar una descripción en lenguaje común (por ejemplo, “despido de trabajador enfermo”) en una búsqueda más ordenada. No decide el caso, no afirma cuál es la solución jurídica y no reemplaza la lectura de las sentencias.</p>
+          <div class="ai-purpose"><strong>¿Qué hace “Preparar búsqueda local”?</strong> Trabaja dentro de este navegador: elimina palabras de relleno, detecta años, agrega términos relacionados que ya están definidos en la herramienta y arma una propuesta revisable. Después podés cargarla en el buscador principal y decidir si presionás <em>Buscar</em>. <strong>No ejecuta la consulta por sí sola y no envía el texto a ningún servicio.</strong></div>
+          <div class="ai-chat" id="ai-chat" aria-live="polite">
+            <div class="ai-message ai-message-assistant">Podés describir el tema que necesitás investigar. Te devolveré una propuesta revisable para el buscador.</div>
+          </div>
+          <div class="ai-compose">
+            <div class="field">
+              <label for="ai-intencion">Tu consulta para el asistente (opcional)</label>
+              <textarea id="ai-intencion" placeholder="ej: decisiones sobre despido por enfermedad con reclamo de daño moral" onkeydown="if((event.ctrlKey||event.metaKey) && event.key==='Enter') generarSugerenciaConsulta()"></textarea>
+            </div>
+            <button type="button" class="btn btn-secondary" id="ai-submit" onclick="generarSugerenciaConsulta()">Preparar búsqueda local</button>
+          </div>
+          <div class="tool-actions">
+            <button type="button" class="btn btn-secondary" onclick="copiarPromptIA()">Copiar instrucción</button>
+          </div>
+          <div class="ai-provider-links" aria-label="Abrir un proveedor externo de IA">
+            <a class="btn btn-secondary" href="https://chatgpt.com/" target="_blank" rel="noopener noreferrer" onclick="prepararProveedorIA(event, 'ChatGPT')">Abrir ChatGPT y copiar instrucción</a>
+            <a class="btn btn-secondary" href="https://claude.ai/" target="_blank" rel="noopener noreferrer" onclick="prepararProveedorIA(event, 'Claude')">Abrir Claude y copiar instrucción</a>
+            <a class="btn btn-secondary" href="https://gemini.google.com/" target="_blank" rel="noopener noreferrer" onclick="prepararProveedorIA(event, 'Gemini')">Abrir Gemini y copiar instrucción</a>
+          </div>
+          <p class="ai-next-step"><strong>Cómo se usan:</strong> la herramienta copia una instrucción limpia, abre el proveedor elegido en otra pestaña y deja el último paso (pegar y enviar) en manos de la persona. No se solicitan contraseñas ni claves de API.</p>
+          <div class="notice-soft" id="ai-state" role="status" aria-live="polite"><strong>Estado:</strong> comprobando las opciones de IA disponibles...</div>
+          <div id="ai-suggestion" class="tool-status" role="status" aria-live="polite"></div>
+        </div>
+      </details>
     </div>
 
     <!-- Fila de filtros -->
@@ -694,39 +740,6 @@
     </div>
   </details>
 
-  <!-- Asistente de consulta -->
-  <details class="tool-panel" id="query-assistant">
-    <summary class="optional-filter-summary">
-      <span>Asistente de consulta con IA (opcional)</span>
-      <span class="optional-badge">no decide ni reemplaza la búsqueda</span>
-    </summary>
-    <div class="tool-body">
-      <p class="tool-help"><strong>Elegí si querés usarlo.</strong> Es una ayuda para transformar una descripción en lenguaje común (por ejemplo, “despido de trabajador enfermo”) en una búsqueda más ordenada. No decide el caso, no afirma cuál es la solución jurídica y no reemplaza la lectura de las sentencias.</p>
-      <div class="ai-purpose"><strong>¿Qué hace “Preparar búsqueda local”?</strong> Trabaja dentro de este navegador: elimina palabras de relleno, detecta años, agrega términos relacionados que ya están definidos en la herramienta y arma una propuesta revisable. Después podés cargarla en el buscador principal y decidir si presionás <em>Buscar</em>. <strong>No ejecuta la consulta por sí sola y no envía el texto a ningún servicio.</strong></div>
-      <div class="ai-chat" id="ai-chat" aria-live="polite">
-        <div class="ai-message ai-message-assistant">Podés describir el tema que necesitás investigar. Te devolveré una propuesta revisable para el buscador.</div>
-      </div>
-      <div class="ai-compose">
-        <div class="field">
-          <label for="ai-intencion">Tu consulta para el asistente (opcional)</label>
-          <textarea id="ai-intencion" placeholder="ej: decisiones sobre despido por enfermedad con reclamo de daño moral" onkeydown="if((event.ctrlKey||event.metaKey) && event.key==='Enter') generarSugerenciaConsulta()"></textarea>
-        </div>
-        <button type="button" class="btn btn-secondary" id="ai-submit" onclick="generarSugerenciaConsulta()">Preparar búsqueda local</button>
-      </div>
-      <div class="tool-actions">
-        <button type="button" class="btn btn-secondary" onclick="copiarPromptIA()">Copiar instrucción</button>
-      </div>
-      <div class="ai-provider-links" aria-label="Abrir un proveedor externo de IA">
-        <a class="btn btn-secondary" href="https://chatgpt.com/" target="_blank" rel="noopener noreferrer" onclick="prepararProveedorIA(event, 'ChatGPT')">Abrir ChatGPT y copiar instrucción</a>
-        <a class="btn btn-secondary" href="https://claude.ai/" target="_blank" rel="noopener noreferrer" onclick="prepararProveedorIA(event, 'Claude')">Abrir Claude y copiar instrucción</a>
-        <a class="btn btn-secondary" href="https://gemini.google.com/" target="_blank" rel="noopener noreferrer" onclick="prepararProveedorIA(event, 'Gemini')">Abrir Gemini y copiar instrucción</a>
-      </div>
-      <p class="ai-next-step"><strong>Cómo se usan:</strong> la herramienta copia una instrucción limpia, abre el proveedor elegido en otra pestaña y deja el último paso (pegar y enviar) en manos de la persona. No se solicitan contraseñas ni claves de API.</p>
-      <div class="notice-soft" id="ai-state" role="status" aria-live="polite"><strong>Estado:</strong> comprobando las opciones de IA disponibles...</div>
-      <div id="ai-suggestion" class="tool-status" role="status" aria-live="polite"></div>
-    </div>
-  </details>
-  </div>
 
   <!-- Instrucciones de uso -->
   <div class="instrucciones">
