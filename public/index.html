@@ -58,6 +58,9 @@
     padding: 18px 20px;
   }
 
+  .search-heading { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; color: var(--azul); }
+  .search-heading strong { font-size: 14px; }
+  .search-heading span { color: var(--extracto); font-size: 12px; }
   .search-main {
     display: flex;
     gap: 10px;
@@ -425,7 +428,13 @@
   .tool-panel summary:focus-visible { outline-offset: -2px; }
   .tool-panel[open] summary { border-bottom: 1px solid var(--borde); }
   .tool-body { padding: 12px 14px 14px; }
-  .tool-help { color: var(--extracto); font-size: 12px; line-height: 1.5; margin-bottom: 10px; }
+  .tool-help { color: var(--extracto); font-size: 12px; line-height: 1.5; margin-bottom: 10px; overflow-wrap: anywhere; }
+  .tool-help strong { color: var(--azul); }
+  .optional-filter-summary { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+  .optional-badge { color: var(--verde); background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 12px; padding: 2px 8px; font-size: 11px; font-weight: 600; }
+  .search-panel > .tool-panel { margin-top: 14px; background: #f8fafc; }
+  .search-panel > .tool-panel .tool-body { background: #fff; }
+  .filter-scope { color: var(--extracto); font-size: 11px; margin-top: -3px; margin-bottom: 10px; }
   .tool-grid {
     display: grid;
     grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -469,13 +478,23 @@
   .compare-cell { border-left: 3px solid var(--azul-claro); padding: 6px 9px; background: #f8fafc; font-size: 12px; line-height: 1.5; }
   .ai-chip-list { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
   .ai-chip { border: 1px solid #bfdbfe; border-radius: 14px; background: #eff6ff; color: var(--azul); padding: 4px 9px; font-size: 12px; }
-  .notice-soft { background: #fffbeb; border: 1px solid #fde68a; color: #92400e; border-radius: 5px; padding: 9px 11px; font-size: 12px; line-height: 1.5; margin-top: 10px; }
+  .ai-chat { display: flex; flex-direction: column; gap: 8px; margin: 10px 0; }
+  .ai-message { border-radius: 8px; padding: 9px 11px; line-height: 1.5; font-size: 13px; max-width: 92%; overflow-wrap: anywhere; }
+  .ai-message-assistant { background: #eef5ff; border: 1px solid #c7dcf7; color: var(--texto); align-self: flex-start; }
+  .ai-message-user { background: #f3f4f6; border: 1px solid var(--borde); color: var(--texto); align-self: flex-end; }
+  .ai-compose { display: flex; gap: 8px; align-items: flex-end; }
+  .ai-compose textarea { min-height: 84px; }
+  .ai-compose .btn { align-self: stretch; }
+  .ai-status-line { color: var(--extracto); font-size: 12px; min-height: 18px; }
+  .notice-soft { background: #fffbeb; border: 1px solid #fde68a; color: #92400e; border-radius: 5px; padding: 9px 11px; font-size: 12px; line-height: 1.5; margin-top: 10px; overflow-wrap: anywhere; }
 
   @media (max-width: 640px) {
     .instrucciones-grid { grid-template-columns: 1fr; }
     .tool-grid { grid-template-columns: 1fr 1fr; }
     .tool-grid .wide { grid-column: span 2; }
     .workspace-grid, .compare-grid { grid-template-columns: 1fr; }
+    .ai-compose { flex-direction: column; align-items: stretch; }
+    .ai-compose .btn { width: 100%; }
   }
 
   @media (max-width: 640px) {
@@ -513,6 +532,10 @@
   <div class="search-panel">
 
     <!-- Fila principal: texto + botón -->
+    <div class="search-heading">
+      <strong>Búsqueda principal</strong>
+      <span>El texto a buscar es el único campo necesario.</span>
+    </div>
     <div class="search-main">
       <div class="field">
         <label for="s-texto">Texto a buscar</label>
@@ -572,68 +595,81 @@
 
     <!-- Historial -->
     <div id="history-simple" class="history-bar"></div>
-  </div>
 
   <!-- Filtros locales sobre el lote recibido -->
   <details class="tool-panel" id="advanced-filters">
-    <summary>Filtros jurídicos y búsqueda dentro de resultados</summary>
+    <summary class="optional-filter-summary">
+      <span>Filtros jurídicos y búsqueda dentro de resultados</span>
+      <span class="optional-badge">opcional</span>
+    </summary>
     <div class="tool-body">
-      <p class="tool-help">Estos filtros refinan el lote recibido del BJN. El buscador conserva la consulta original y muestra cuántos resultados quedaron después del refinamiento.</p>
+      <p class="tool-help"><strong>Podés dejar todos estos campos vacíos.</strong> La consulta principal ya funciona con el texto de arriba. Estos filtros refinan, después de presionar Buscar, el lote recibido del BJN y no reemplazan el texto principal.</p>
+      <p class="filter-scope">Al aplicarlos, la URL conserva la búsqueda y los filtros para que el enlace pueda reproducirse.</p>
       <div class="tool-grid">
         <div class="field">
-          <label for="f-organo">Órgano / tribunal</label>
+          <label for="f-organo">Órgano / tribunal (opcional)</label>
           <input type="text" id="f-organo" placeholder="ej: Suprema Corte, Trabajo 3º" autocomplete="off">
         </div>
         <div class="field">
-          <label for="f-proceso">Proceso / materia</label>
+          <label for="f-proceso">Proceso / materia (opcional)</label>
           <input type="text" id="f-proceso" placeholder="ej: proceso laboral" autocomplete="off">
         </div>
         <div class="field">
-          <label for="f-identificador">Identificador</label>
+          <label for="f-identificador">Identificador (opcional)</label>
           <input type="text" id="f-identificador" placeholder="ej: 161/2026, SEF" autocomplete="off">
         </div>
         <div class="field">
-          <label for="f-excluir">Excluir palabras</label>
+          <label for="f-excluir">Excluir palabras (opcional)</label>
           <input type="text" id="f-excluir" placeholder="separadas por espacios o comas" autocomplete="off">
         </div>
         <div class="field">
-          <label for="f-anio-desde">Año desde</label>
+          <label for="f-anio-desde">Año desde (opcional)</label>
           <input type="number" id="f-anio-desde" min="1800" max="2200" placeholder="ej: 2018">
         </div>
         <div class="field">
-          <label for="f-anio-hasta">Año hasta</label>
+          <label for="f-anio-hasta">Año hasta (opcional)</label>
           <input type="number" id="f-anio-hasta" min="1800" max="2200" placeholder="ej: 2026">
         </div>
         <div class="field wide">
-          <label for="f-en-resultados">Buscar dentro de resultados</label>
+          <label for="f-en-resultados">Buscar dentro de resultados (opcional)</label>
           <input type="text" id="f-en-resultados" placeholder="palabra, órgano, proceso o fragmento del extracto" autocomplete="off" onkeydown="if(event.key==='Enter') aplicarFiltrosResultados()">
         </div>
       </div>
       <div class="tool-actions">
-        <button type="button" class="btn btn-secondary" onclick="aplicarFiltrosResultados()">Aplicar filtros</button>
-        <button type="button" class="btn btn-secondary" onclick="limpiarFiltrosResultados()">Limpiar filtros</button>
+        <button type="button" class="btn btn-secondary" onclick="aplicarFiltrosResultados()">Aplicar filtros opcionales</button>
+        <button type="button" class="btn btn-secondary" onclick="limpiarFiltrosResultados()">Quitar filtros</button>
       </div>
       <div id="results-filter-status" class="tool-status" role="status" aria-live="polite"></div>
     </div>
   </details>
 
-  <!-- Asistente local para formular consultas -->
+  <!-- Asistente de consulta -->
   <details class="tool-panel" id="query-assistant">
-    <summary>Asistente gratuito para formular la consulta</summary>
+    <summary class="optional-filter-summary">
+      <span>Asistente de consulta con IA (opcional)</span>
+      <span class="optional-badge">no decide ni reemplaza la búsqueda</span>
+    </summary>
     <div class="tool-body">
-      <p class="tool-help">Funciona dentro del navegador, sin cuenta y sin enviar este texto a un servicio externo. Propone términos y filtros orientativos; la búsqueda solo se ejecuta cuando vos la confirmás.</p>
-      <div class="field">
-        <label for="ai-intencion">Describí qué necesitás encontrar</label>
-        <textarea id="ai-intencion" placeholder="ej: decisiones sobre despido por enfermedad con reclamo de daño moral"></textarea>
+      <p class="tool-help"><strong>Elegí si querés usarlo.</strong> El modo gratuito local funciona dentro de este navegador y propone términos orientativos. No se conecta automáticamente a tu cuenta paga de ChatGPT.</p>
+      <div class="ai-chat" id="ai-chat" aria-live="polite">
+        <div class="ai-message ai-message-assistant">Podés describir el tema que necesitás investigar. Te devolveré una propuesta revisable para el buscador.</div>
+      </div>
+      <div class="ai-compose">
+        <div class="field">
+          <label for="ai-intencion">Tu consulta para el asistente (opcional)</label>
+          <textarea id="ai-intencion" placeholder="ej: decisiones sobre despido por enfermedad con reclamo de daño moral" onkeydown="if((event.ctrlKey||event.metaKey) && event.key==='Enter') generarSugerenciaConsulta()"></textarea>
+        </div>
+        <button type="button" class="btn btn-secondary" onclick="generarSugerenciaConsulta()">Enviar al asistente</button>
       </div>
       <div class="tool-actions">
-        <button type="button" class="btn btn-secondary" onclick="generarSugerenciaConsulta()">Proponer búsqueda</button>
-        <button type="button" class="btn btn-secondary" onclick="copiarPromptIA()">Copiar instrucción para otra IA</button>
-        <a class="btn btn-secondary" href="https://chatgpt.com/" target="_blank" rel="noopener noreferrer">Abrir ChatGPT</a>
+        <button type="button" class="btn btn-secondary" onclick="copiarPromptIA()">Copiar instrucción</button>
+        <a class="btn btn-secondary" href="https://chatgpt.com/" target="_blank" rel="noopener noreferrer" onclick="prepararChatGPT(event)">Usar mi cuenta de ChatGPT</a>
       </div>
+      <div class="notice-soft" id="ai-state" role="status" aria-live="polite"><strong>Estado:</strong> comprobando las opciones de IA disponibles...</div>
       <div id="ai-suggestion" class="tool-status" role="status" aria-live="polite"></div>
     </div>
   </details>
+  </div>
 
   <!-- Instrucciones de uso -->
   <div class="instrucciones">
@@ -1317,14 +1353,24 @@ const TERMINOS_SUGERIDOS = {
   licencia: ['licencia', 'licencia médica', 'salario'],
 };
 
-function generarSugerenciaConsulta() {
-  const intention = (document.getElementById('ai-intencion')?.value || '').trim();
-  const output = document.getElementById('ai-suggestion');
-  if (!output) return;
-  if (!intention) {
-    output.textContent = 'Describí primero el tema o problema jurídico que querés investigar.';
-    return;
-  }
+function limpiarIntencionIA(value) {
+  return String(value || '')
+    .replace(/\bhttps?:\/\/\S+/gi, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function agregarMensajeIA(role, text) {
+  const chat = document.getElementById('ai-chat');
+  if (!chat) return;
+  const message = document.createElement('div');
+  message.className = `ai-message ai-message-${role}`;
+  message.textContent = String(text || '');
+  chat.appendChild(message);
+  message.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+function generarSugerenciaLocal(intention) {
   const tokens = listaTerminos(normalizarTexto(intention)).filter(token => token.length > 2 && !ASISTENTE_STOPWORDS.has(token) && !/^\d{4}$/.test(token));
   const expanded = [];
   tokens.forEach(token => {
@@ -1335,8 +1381,79 @@ function generarSugerenciaConsulta() {
   const uniqueExpanded = [...new Set(expanded)];
   const texto = uniqueExpanded.slice(0, 8).join(' ') || intention;
   const yearMatches = intention.match(/\b(?:18|19|20|21)\d{2}\b/g) || [];
-  sugerenciaIAActual = { texto, tipoBusqueda: 'TODAS_LAS_PALABRAS', anioDesde: yearMatches[0] || '', anioHasta: yearMatches[yearMatches.length - 1] || '' };
-  output.innerHTML = `<div><strong>Propuesta:</strong> ${escapeHtml(texto)}</div><div class="ai-chip-list">${uniqueExpanded.slice(0, 8).map(term => `<span class="ai-chip">${escapeHtml(term)}</span>`).join('')}</div><div class="tool-actions"><button type="button" class="btn btn-secondary" onclick="usarSugerenciaIA()">Usar esta propuesta en el buscador</button></div><small>La propuesta se generó localmente con reglas de términos; no es un análisis jurídico ni una conclusión.</small>`;
+  return {
+    texto,
+    tipoBusqueda: 'TODAS_LAS_PALABRAS',
+    anioDesde: yearMatches[0] || '',
+    anioHasta: yearMatches[yearMatches.length - 1] || '',
+    terms: uniqueExpanded.slice(0, 8),
+  };
+}
+
+function mostrarPropuestaLocal(suggestion, explanation = 'La propuesta se generó localmente con reglas de términos; no es un análisis jurídico ni una conclusión.') {
+  const output = document.getElementById('ai-suggestion');
+  if (!output) return;
+  sugerenciaIAActual = suggestion;
+  output.innerHTML = `<div><strong>Propuesta revisable:</strong> ${escapeHtml(suggestion.texto)}</div><div class="ai-chip-list">${suggestion.terms.map(term => `<span class="ai-chip">${escapeHtml(term)}</span>`).join('')}</div><div class="tool-actions"><button type="button" class="btn btn-secondary" onclick="usarSugerenciaIA()">Usar esta propuesta en el buscador</button></div><small>${escapeHtml(explanation)}</small>`;
+}
+
+async function generarSugerenciaConsulta() {
+  const rawIntention = document.getElementById('ai-intencion')?.value || '';
+  const intention = limpiarIntencionIA(rawIntention);
+  const input = document.getElementById('ai-intencion');
+  if (input && input.value !== intention) input.value = intention;
+  const output = document.getElementById('ai-suggestion');
+  if (!output) return;
+  if (!intention) {
+    output.textContent = 'Describí primero el tema o problema jurídico. Las direcciones web pegadas se quitan automáticamente.';
+    return;
+  }
+
+  agregarMensajeIA('user', intention);
+  output.textContent = 'Consultando el asistente...';
+  const submitButton = document.querySelector('#query-assistant .ai-compose .btn');
+  if (submitButton) submitButton.disabled = true;
+  try {
+    const response = await fetch('/api/ia/consulta', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ intention }),
+    });
+    const data = await response.json().catch(() => ({}));
+    if (response.ok && data.answer) {
+      agregarMensajeIA('assistant', data.answer);
+      output.innerHTML = '<small>Respuesta generativa recibida. Revisá cada sugerencia y aplicala al buscador solo después de comprobar que refleja tu intención.</small>';
+      sugerenciaIAActual = null;
+      return;
+    }
+    if (response.status !== 503 && response.status !== 404) {
+      agregarMensajeIA('assistant', data.error || 'La IA generativa no pudo responder. Se ofrece una propuesta local para no interrumpir la búsqueda.');
+    }
+  } catch (error) {
+    agregarMensajeIA('assistant', 'La IA generativa no está disponible en este momento. Se ofrece una propuesta local para no interrumpir la búsqueda.');
+  } finally {
+    if (submitButton) submitButton.disabled = false;
+  }
+
+  const suggestion = generarSugerenciaLocal(intention);
+  agregarMensajeIA('assistant', `Modo local gratuito: puedo ayudarte a convertir la intención en términos revisables. Propuesta: ${suggestion.texto}`);
+  mostrarPropuestaLocal(suggestion);
+}
+
+async function actualizarEstadoIA() {
+  const state = document.getElementById('ai-state');
+  if (!state) return;
+  try {
+    const response = await fetch('/api/ia/estado', { cache: 'no-store' });
+    const data = await response.json();
+    if (data.configured) {
+      state.innerHTML = '<strong>Estado:</strong> IA generativa del servidor habilitada. La clave queda protegida en el servidor; no se solicitan credenciales al usuario.';
+    } else {
+      state.innerHTML = '<strong>Estado:</strong> modo local gratuito. La IA generativa del servidor no está configurada; podés usar el modo local o abrir tu cuenta externa de ChatGPT.';
+    }
+  } catch (error) {
+    state.innerHTML = '<strong>Estado:</strong> modo local gratuito disponible. No se pudo comprobar una IA generativa del servidor.';
+  }
 }
 
 function usarSugerenciaIA() {
@@ -1354,15 +1471,30 @@ function usarSugerenciaIA() {
   texto?.focus();
 }
 
+function promptBusquedaIA(intention) {
+  return `Actuá como asistente de búsqueda jurídica. Convertí la siguiente intención en términos de búsqueda, sinónimos posibles, tipo de búsqueda, órgano o tribunal solo si surge, proceso y período. No inventes normas, sentencias ni hechos. Entregá solo sugerencias para que una persona las revise antes de consultar el BJN. Intención: ${intention}`;
+}
+
 function copiarPromptIA() {
-  const intention = (document.getElementById('ai-intencion')?.value || '').trim();
+  const intention = limpiarIntencionIA(document.getElementById('ai-intencion')?.value || '');
   if (!intention) {
     const output = document.getElementById('ai-suggestion');
     if (output) output.textContent = 'Escribí una intención de búsqueda antes de copiar la instrucción.';
     return;
   }
-  const prompt = `Actuá como asistente de búsqueda jurídica. Convertí la siguiente intención en términos de búsqueda, sinónimos posibles, tipo de búsqueda, órgano o tribunal si surge, proceso y período. No inventes normas, sentencias ni hechos. Entregá solo sugerencias para que una persona las revise antes de consultar el BJN. Intención: ${intention}`;
+  const prompt = promptBusquedaIA(intention);
   navigator.clipboard.writeText(prompt).then(() => showToast('Instrucción copiada. Podés pegarla en tu cuenta de IA.')).catch(() => window.prompt('Copiá esta instrucción:', prompt));
+}
+
+function prepararChatGPT(event) {
+  const intention = limpiarIntencionIA(document.getElementById('ai-intencion')?.value || '');
+  if (!intention) return;
+  event.preventDefault();
+  const prompt = promptBusquedaIA(intention);
+  const chatWindow = window.open('https://chatgpt.com/', '_blank', 'noopener,noreferrer');
+  navigator.clipboard.writeText(prompt)
+    .then(() => showToast(chatWindow ? 'ChatGPT se abrió en otra pestaña. La instrucción quedó copiada para pegarla allí.' : 'La instrucción quedó copiada. Abrí ChatGPT y pegala allí.'))
+    .catch(() => window.prompt('Copiá esta instrucción en ChatGPT:', prompt));
 }
 
 // ─── URL params (compartir búsqueda) ──────────────────────────────────────
@@ -1950,6 +2082,7 @@ function toggleInstrucciones() {
 // Cargar organización local y búsqueda desde URL si existe (enlace compartido).
 window.addEventListener('DOMContentLoaded', () => {
   renderWorkspace();
+  actualizarEstadoIA();
   loadFromParams();
 });
 </script>
