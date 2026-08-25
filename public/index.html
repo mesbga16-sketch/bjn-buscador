@@ -347,7 +347,7 @@
   }
   .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 
-  .header-links { margin-left: auto; display: flex; align-items: center; gap: 16px; }
+  .header-links { margin-left: auto; display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 8px 16px; }
   .bjn-link {
     font-size: 12px;
     color: rgba(255,255,255,0.75);
@@ -411,6 +411,9 @@
   }
 
   @media (max-width: 640px) {
+    header { flex-wrap: wrap; }
+    header > div { flex: 1 1 100%; }
+    .header-links { width: 100%; margin-left: 0; justify-content: flex-start; }
     .filters-row { grid-template-columns: 1fr 1fr; }
     .search-main { flex-wrap: wrap; }
     .search-main .btn { width: 100%; }
@@ -430,7 +433,8 @@
   </div>
   <nav class="header-links">
     <a class="bjn-link" href="/verificador">Verificador de citas legales</a>
-    <a class="bjn-link" href="https://bjn.poderjudicial.gub.uy/" target="_blank">Abrir BJN original</a>
+    <a class="bjn-link" href="https://judiciadisticas-development.web.app/proyectos/anonimizacion" target="_blank" rel="noopener noreferrer">Anonimización</a>
+    <a class="bjn-link" href="https://bjn.poderjudicial.gub.uy/" target="_blank" rel="noopener noreferrer">Abrir BJN original</a>
   </nav>
 </header>
 
