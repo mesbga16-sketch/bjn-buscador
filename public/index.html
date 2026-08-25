@@ -562,6 +562,50 @@
 
 <main class="container">
 
+  <!-- Instrucciones de uso del buscador tradicional -->
+  <div class="instrucciones instrucciones-top">
+    <div class="instrucciones-titulo" role="button" tabindex="0" aria-expanded="false" aria-controls="instrucciones-body" onclick="toggleInstrucciones()" onkeydown="if(event.key==='Enter'||event.key===' ') { event.preventDefault(); toggleInstrucciones(); }">
+      <span>&#9432; Cómo usar el buscador tradicional del BJN</span>
+      <span id="instrucciones-chevron" style="font-size:11px;" aria-hidden="true">&#9660;</span>
+    </div>
+    <div id="instrucciones-body" style="display:none;">
+      <div class="instrucciones-grid">
+        <div class="instruccion-item">
+          <div class="instruccion-num">1</div>
+          <div>
+            <strong>Escribí el texto a buscar</strong> y presioná <em>Buscar</em> o Enter.
+            El buscador consulta el texto completo de las sentencias publicadas en el BJN.
+          </div>
+        </div>
+        <div class="instruccion-item">
+          <div class="instruccion-num">2</div>
+          <div>
+            <strong>Ajustá los filtros</strong> según necesites:
+            <em>Tipo de búsqueda</em> controla cómo se interpretan las palabras;
+            <em>Tipo de sentencia</em> filtra entre definitivas e interlocutorias;
+            <em>Ordenar por</em> define si ves primero los más relevantes o los más recientes.
+          </div>
+        </div>
+        <div class="instruccion-item">
+          <div class="instruccion-num">3</div>
+          <div>
+            <strong>Hacé clic en el número de la sentencia</strong> (el badge azul oscuro, ej: <em>96/2021</em>) o en cualquier parte de la tarjeta para ver el texto completo.
+            Los términos buscados quedan resaltados en amarillo dentro del texto.
+          </div>
+        </div>
+        <div class="instruccion-item">
+          <div class="instruccion-num">4</div>
+          <div>
+            Dentro de la sentencia podés <strong>&#128203; Copiar</strong> el texto al portapapeles,
+            <strong>&#128190; Exportar .txt</strong> para descargarla como archivo,
+            o <strong>&#x2715; Cerrar</strong> para volver a los resultados.
+            El botón <strong>&#128279; Compartir</strong> copia un enlace con la búsqueda actual.
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- Formulario de búsqueda -->
   <div class="search-panel">
 
@@ -570,52 +614,17 @@
       <strong>Búsqueda principal</strong>
       <span>El texto a buscar es el único campo necesario.</span>
     </div>
-    <div class="search-top-grid">
-      <div class="search-main">
-        <div class="field">
-          <label for="s-texto">Texto a buscar</label>
-          <input type="text" id="s-texto"
-                 placeholder="ej: despido abusivo, accidente laboral, responsabilidad estatal..."
-                 autocomplete="off" aria-describedby="texto-ayuda"
-                 onkeydown="if(event.key==='Enter') buscar()"
-                 oninput="prepararNuevaBusqueda()">
-          <span id="texto-ayuda" class="sr-only">Ingresá palabras o una frase para consultar el texto de las sentencias.</span>
-        </div>
-        <button type="button" class="btn btn-primary" onclick="buscar()" style="padding:8px 28px; align-self:flex-end;">Buscar</button>
+    <div class="search-main">
+      <div class="field">
+        <label for="s-texto">Texto a buscar</label>
+        <input type="text" id="s-texto"
+               placeholder="ej: despido abusivo, accidente laboral, responsabilidad estatal..."
+               autocomplete="off" aria-describedby="texto-ayuda"
+               onkeydown="if(event.key==='Enter') buscar()"
+               oninput="prepararNuevaBusqueda()">
+        <span id="texto-ayuda" class="sr-only">Ingresá palabras o una frase para consultar el texto de las sentencias.</span>
       </div>
-
-      <!-- Asistente visible junto al buscador; sigue siendo opcional -->
-      <details class="tool-panel" id="query-assistant">
-        <summary class="optional-filter-summary">
-          <span>Asistente de consulta con IA (opcional)</span>
-          <span class="optional-badge">no decide ni reemplaza la búsqueda</span>
-        </summary>
-        <div class="tool-body">
-          <p class="tool-help"><strong>Elegí si querés usarlo.</strong> Es una ayuda para transformar una descripción en lenguaje común (por ejemplo, “despido de trabajador enfermo”) en una búsqueda más ordenada. No decide el caso, no afirma cuál es la solución jurídica y no reemplaza la lectura de las sentencias.</p>
-          <div class="ai-purpose"><strong>¿Qué hace “Preparar búsqueda local”?</strong> Trabaja dentro de este navegador: elimina palabras de relleno, detecta años, agrega términos relacionados que ya están definidos en la herramienta y arma una propuesta revisable. Después podés cargarla en el buscador principal y decidir si presionás <em>Buscar</em>. <strong>No ejecuta la consulta por sí sola y no envía el texto a ningún servicio.</strong></div>
-          <div class="ai-chat" id="ai-chat" aria-live="polite">
-            <div class="ai-message ai-message-assistant">Podés describir el tema que necesitás investigar. Te devolveré una propuesta revisable para el buscador.</div>
-          </div>
-          <div class="ai-compose">
-            <div class="field">
-              <label for="ai-intencion">Tu consulta para el asistente (opcional)</label>
-              <textarea id="ai-intencion" placeholder="ej: decisiones sobre despido por enfermedad con reclamo de daño moral" onkeydown="if((event.ctrlKey||event.metaKey) && event.key==='Enter') generarSugerenciaConsulta()"></textarea>
-            </div>
-            <button type="button" class="btn btn-secondary" id="ai-submit" onclick="generarSugerenciaConsulta()">Preparar búsqueda local</button>
-          </div>
-          <div class="tool-actions">
-            <button type="button" class="btn btn-secondary" onclick="copiarPromptIA()">Copiar instrucción</button>
-          </div>
-          <div class="ai-provider-links" aria-label="Abrir un proveedor externo de IA">
-            <a class="btn btn-secondary" href="https://chatgpt.com/" target="_blank" rel="noopener noreferrer" onclick="prepararProveedorIA(event, 'ChatGPT')">Abrir ChatGPT y copiar instrucción</a>
-            <a class="btn btn-secondary" href="https://claude.ai/" target="_blank" rel="noopener noreferrer" onclick="prepararProveedorIA(event, 'Claude')">Abrir Claude y copiar instrucción</a>
-            <a class="btn btn-secondary" href="https://gemini.google.com/" target="_blank" rel="noopener noreferrer" onclick="prepararProveedorIA(event, 'Gemini')">Abrir Gemini y copiar instrucción</a>
-          </div>
-          <p class="ai-next-step"><strong>Cómo se usan:</strong> la herramienta copia una instrucción limpia, abre el proveedor elegido en otra pestaña y deja el último paso (pegar y enviar) en manos de la persona. No se solicitan contraseñas ni claves de API.</p>
-          <div class="notice-soft" id="ai-state" role="status" aria-live="polite"><strong>Estado:</strong> comprobando las opciones de IA disponibles...</div>
-          <div id="ai-suggestion" class="tool-status" role="status" aria-live="polite"></div>
-        </div>
-      </details>
+      <button type="button" class="btn btn-primary" onclick="buscar()" style="padding:8px 28px; align-self:flex-end;">Buscar</button>
     </div>
 
     <!-- Fila de filtros -->
@@ -741,49 +750,38 @@
   </details>
 
 
-  <!-- Instrucciones de uso -->
-  <div class="instrucciones">
-    <div class="instrucciones-titulo" role="button" tabindex="0" aria-expanded="false" aria-controls="instrucciones-body" onclick="toggleInstrucciones()" onkeydown="if(event.key==='Enter'||event.key===' ') { event.preventDefault(); toggleInstrucciones(); }">
-      <span>&#9432; Cómo usar el buscador</span>
-      <span id="instrucciones-chevron" style="font-size:11px;" aria-hidden="true">&#9660;</span>
-    </div>
-    <div id="instrucciones-body" style="display:none;">
-      <div class="instrucciones-grid">
-        <div class="instruccion-item">
-          <div class="instruccion-num">1</div>
-          <div>
-            <strong>Escribi el texto a buscar</strong> y presioná <em>Buscar</em> o Enter.
-            El buscador consulta el texto completo de todas las sentencias publicadas en el BJN.
-          </div>
-        </div>
-        <div class="instruccion-item">
-          <div class="instruccion-num">2</div>
-          <div>
-            <strong>Ajustá los filtros</strong> según necesites:
-            <em>Tipo de búsqueda</em> controla cómo se interpretan las palabras;
-            <em>Tipo de sentencia</em> filtra entre definitivas e interlocutorias;
-            <em>Ordenar por</em> define si ves primero los más relevantes o los más recientes.
-          </div>
-        </div>
-        <div class="instruccion-item">
-          <div class="instruccion-num">3</div>
-          <div>
-            <strong>Hacé clic en el número de la sentencia</strong> (el badge azul oscuro, ej: <em>96/2021</em>) o en cualquier parte de la tarjeta para ver el texto completo.
-            Los términos buscados quedan resaltados en amarillo dentro del texto.
-          </div>
-        </div>
-        <div class="instruccion-item">
-          <div class="instruccion-num">4</div>
-          <div>
-            Dentro de la sentencia podés <strong>&#128203; Copiar</strong> el texto al portapapeles,
-            <strong>&#128190; Exportar .txt</strong> para descargarla como archivo,
-            o <strong>&#x2715; Cerrar</strong> para volver a los resultados.
-            El botón <strong>&#128279; Compartir</strong> copia un enlace con la búsqueda actual.
-          </div>
-        </div>
+  <!-- Instrucciones trasladadas al inicio; el asistente queda al final como complemento -->
+  <details class="tool-panel" id="query-assistant">
+    <summary class="optional-filter-summary">
+      <span>Asistente de consulta con IA (opcional)</span>
+      <span class="optional-badge">no decide ni reemplaza la búsqueda</span>
+    </summary>
+    <div class="tool-body">
+      <p class="tool-help"><strong>Elegí si querés usarlo.</strong> Es una ayuda para transformar una descripción en lenguaje común (por ejemplo, “despido de trabajador enfermo”) en una búsqueda más ordenada. No decide el caso, no afirma cuál es la solución jurídica y no reemplaza la lectura de las sentencias.</p>
+      <div class="ai-purpose"><strong>¿Qué hace “Preparar búsqueda local”?</strong> Trabaja dentro de este navegador: elimina palabras de relleno, detecta años, agrega términos relacionados que ya están definidos en la herramienta y arma una propuesta revisable. Después podés cargarla en el buscador principal y decidir si presionás <em>Buscar</em>. <strong>No ejecuta la consulta por sí sola y no envía el texto a ningún servicio.</strong></div>
+      <div class="ai-chat" id="ai-chat" aria-live="polite">
+        <div class="ai-message ai-message-assistant">Podés describir el tema que necesitás investigar. Te devolveré una propuesta revisable para el buscador.</div>
       </div>
+      <div class="ai-compose">
+        <div class="field">
+          <label for="ai-intencion">Tu consulta para el asistente (opcional)</label>
+          <textarea id="ai-intencion" placeholder="ej: decisiones sobre despido por enfermedad con reclamo de daño moral" onkeydown="if((event.ctrlKey||event.metaKey) && event.key==='Enter') generarSugerenciaConsulta()"></textarea>
+        </div>
+        <button type="button" class="btn btn-secondary" id="ai-submit" onclick="generarSugerenciaConsulta()">Preparar búsqueda local</button>
+      </div>
+      <div class="tool-actions">
+        <button type="button" class="btn btn-secondary" onclick="copiarPromptIA()">Copiar instrucción</button>
+      </div>
+      <div class="ai-provider-links" aria-label="Abrir un proveedor externo de IA">
+        <a class="btn btn-secondary" href="https://chatgpt.com/" target="_blank" rel="noopener noreferrer" onclick="prepararProveedorIA(event, 'ChatGPT')">Abrir ChatGPT y copiar instrucción</a>
+        <a class="btn btn-secondary" href="https://claude.ai/" target="_blank" rel="noopener noreferrer" onclick="prepararProveedorIA(event, 'Claude')">Abrir Claude y copiar instrucción</a>
+        <a class="btn btn-secondary" href="https://gemini.google.com/" target="_blank" rel="noopener noreferrer" onclick="prepararProveedorIA(event, 'Gemini')">Abrir Gemini y copiar instrucción</a>
+      </div>
+      <p class="ai-next-step"><strong>Cómo se usan:</strong> la herramienta copia una instrucción limpia, abre el proveedor elegido en otra pestaña y deja el último paso (pegar y enviar) en manos de la persona. No se solicitan contraseñas ni claves de API.</p>
+      <div class="notice-soft" id="ai-state" role="status" aria-live="polite"><strong>Estado:</strong> comprobando las opciones de IA disponibles...</div>
+      <div id="ai-suggestion" class="tool-status" role="status" aria-live="polite"></div>
     </div>
-  </div>
+  </details>
 
   <!-- Aviso de cold start (visible solo cuando la búsqueda tarda más de 8s) -->
   <div id="cold-start-notice" class="cold-start-notice">
