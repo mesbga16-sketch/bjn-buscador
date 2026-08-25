@@ -490,6 +490,20 @@
   .ai-compose .btn { align-self: stretch; }
   .ai-status-line { color: var(--extracto); font-size: 12px; min-height: 18px; }
   .notice-soft { background: #fffbeb; border: 1px solid #fde68a; color: #92400e; border-radius: 5px; padding: 9px 11px; font-size: 12px; line-height: 1.5; margin-top: 10px; overflow-wrap: anywhere; }
+  .local-folder-tool { border: 2px solid #9ec5ef; background: #f5f9ff; }
+  .local-folder-tool summary { background: #eaf3ff; }
+  .local-folder-tool[open] summary { border-bottom-color: #9ec5ef; }
+  .local-purpose { background: #fff; border-left: 4px solid var(--azul-claro); padding: 11px 12px; color: var(--texto); font-size: 13px; line-height: 1.55; margin-bottom: 12px; }
+  .local-purpose strong { color: var(--azul); }
+  .local-folder-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .folder-picker-label { display: inline-flex; align-items: center; justify-content: center; min-height: 36px; }
+  .local-folder-input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+  .local-folder-state { background: #f0fdf4; border: 1px solid #bbf7d0; color: var(--verde); border-radius: 5px; padding: 9px 11px; font-size: 12px; line-height: 1.45; margin-top: 10px; }
+  .local-folder-results { display: flex; flex-direction: column; gap: 7px; margin-top: 12px; }
+  .local-file-result { background: #fff; border: 1px solid var(--borde); border-radius: 5px; padding: 9px 11px; font-size: 12px; line-height: 1.45; }
+  .local-file-result strong { color: var(--azul); overflow-wrap: anywhere; }
+  .local-file-result small { display: block; color: var(--extracto); margin-top: 3px; }
+  .local-file-result mark { background: #fde047; padding: 0 2px; border-radius: 2px; }
 
   @media (max-width: 640px) {
     .instrucciones-grid { grid-template-columns: 1fr; }
@@ -498,6 +512,7 @@
     .workspace-grid, .workspace-search-grid, .compare-grid { grid-template-columns: 1fr; }
     .ai-compose { flex-direction: column; align-items: stretch; }
     .ai-compose .btn { width: 100%; }
+    .local-folder-actions .btn, .local-folder-actions .folder-picker-label { width: 100%; }
   }
 
   @media (max-width: 640px) {
@@ -598,6 +613,34 @@
 
     <!-- Historial -->
     <div id="history-simple" class="history-bar"></div>
+
+  <!-- Búsqueda opcional en archivos del equipo -->
+  <details class="tool-panel local-folder-tool" id="local-files-panel" open>
+    <summary class="optional-filter-summary">
+      <span>Buscar en una carpeta del equipo (opcional)</span>
+      <span class="optional-badge">no se suben archivos</span>
+    </summary>
+    <div class="tool-body">
+      <div class="local-purpose"><strong>¿Para qué sirve?</strong> Elegí una carpeta de tu computadora o teléfono para buscar dentro de sus archivos desde este navegador. La aplicación no los envía al BJN, al servidor ni a una IA. La búsqueda funciona por nombre de archivo y por contenido legible de archivos de texto; los PDF y DOCX se identifican por nombre, pero requieren extracción u OCR para buscar su contenido.</div>
+      <div class="local-folder-actions">
+        <label class="btn btn-secondary folder-picker-label" for="local-folder-input">Elegir carpeta local para buscar</label>
+        <input class="local-folder-input" id="local-folder-input" type="file" webkitdirectory directory multiple onchange="cargarArchivosCarpetaLocal(event)" aria-label="Elegir una carpeta local para buscar">
+        <button type="button" class="btn btn-secondary" onclick="limpiarCarpetaLocalBusqueda()">Quitar carpeta</button>
+      </div>
+      <div id="local-folder-state" class="local-folder-state" role="status" aria-live="polite">No elegiste una carpeta. Esta función es opcional y no afecta la búsqueda del BJN.</div>
+      <div class="workspace-search-grid">
+        <div class="field">
+          <label for="local-files-query">Texto dentro de la carpeta (opcional)</label>
+          <input type="search" id="local-files-query" placeholder="ej: despido, licencia, responsabilidad" autocomplete="off" onkeydown="if(event.key==='Enter') buscarEnCarpetaLocal()">
+        </div>
+        <div class="field" style="justify-content:flex-end;">
+          <button type="button" class="btn btn-primary" onclick="buscarEnCarpetaLocal()">Buscar en la carpeta elegida</button>
+        </div>
+      </div>
+      <div id="local-folder-status" class="tool-status" role="status" aria-live="polite"></div>
+      <div id="local-folder-results" class="local-folder-results" aria-live="polite"></div>
+    </div>
+  </details>
 
   <!-- Filtros locales sobre el lote recibido -->
   <details class="tool-panel" id="advanced-filters">
@@ -745,7 +788,7 @@
         <span class="optional-badge">solo en este navegador</span>
       </summary>
       <div class="tool-body">
-        <p class="tool-help"><strong>Esta sección es opcional.</strong> Podés crear carpetas, guardar resultados marcados y buscar dentro de tus resultados guardados. La organización y las notas quedan en este navegador; no se suben al BJN ni al servidor.</p>
+        <p class="tool-help"><strong>Esta sección es diferente de la búsqueda en una carpeta del equipo.</strong> Acá podés crear carpetas internas del navegador, guardar resultados del BJN, agregar notas y buscar dentro de esos resultados guardados. La organización y las notas quedan en este navegador; no se suben al BJN ni al servidor.</p>
         <div class="workspace-grid">
           <div>
             <div class="field">
@@ -779,7 +822,7 @@
           </div>
         </div>
         <div class="tool-actions">
-          <button type="button" class="btn btn-secondary" onclick="elegirCarpetaExportacion()">Elegir carpeta del equipo para exportar</button>
+          <button type="button" class="btn btn-secondary" onclick="elegirCarpetaExportacion()">Elegir carpeta del equipo solo para exportar</button>
           <button type="button" class="btn btn-secondary" onclick="exportarInvestigacion()">Exportar investigación</button>
         </div>
         <p id="workspace-folder-choice" class="folder-choice-note">Carpeta del equipo: todavía no elegida. La selección se usa solo para exportar.</p>
@@ -840,6 +883,9 @@ let filtrosResultados = {};
 let sugerenciaIAActual = null;
 let iaEstado = 'unknown';
 let carpetaExportacionHandle = null;
+let archivosCarpetaLocal = [];
+let nombreCarpetaLocal = '';
+let busquedaCarpetaLocalGen = 0;
 const WORKSPACE_STORAGE_KEY = 'bjn_workspace_v1';
 let workspaceData = cargarWorkspaceLocal();
 
@@ -1411,6 +1457,116 @@ async function exportarInvestigacion() {
   mostrarEstadoWorkspace('Investigación descargada. El navegador puede permitir elegir la carpeta de destino.');
 }
 
+// ─── Búsqueda local en una carpeta del equipo ────────────────────────────────
+
+function extensionesTextoLocal() {
+  return new Set(['txt', 'md', 'csv', 'json', 'xml', 'html', 'htm', 'css', 'js', 'ts', 'py', 'java', 'sql', 'rtf']);
+}
+
+function extensionArchivoLocal(name) {
+  const parts = String(name || '').toLowerCase().split('.');
+  return parts.length > 1 ? parts.pop() : '';
+}
+
+function rutaArchivoLocal(file) {
+  return file.webkitRelativePath || file.name || 'archivo';
+}
+
+function cargarArchivosCarpetaLocal(event) {
+  const inputFiles = Array.from(event?.target?.files || []);
+  archivosCarpetaLocal = inputFiles;
+  const firstPath = inputFiles[0]?.webkitRelativePath || '';
+  nombreCarpetaLocal = firstPath.split('/')[0] || (inputFiles.length ? 'carpeta elegida' : '');
+  const state = document.getElementById('local-folder-state');
+  const results = document.getElementById('local-folder-results');
+  const status = document.getElementById('local-folder-status');
+  if (!inputFiles.length) {
+    if (state) state.textContent = 'No elegiste una carpeta. Esta función es opcional y no afecta la búsqueda del BJN.';
+    if (results) results.replaceChildren();
+    if (status) status.textContent = '';
+    return;
+  }
+  if (state) state.textContent = `Carpeta elegida: ${nombreCarpetaLocal}. Hay ${inputFiles.length} archivo${inputFiles.length === 1 ? '' : 's'} disponibles para buscar solo en este navegador.`;
+  if (status) status.textContent = 'Carpeta cargada localmente. Escribí un término y presioná “Buscar en la carpeta elegida”.';
+  if (results) results.innerHTML = '<div class="local-file-result"><strong>Carpeta lista para buscar</strong><small>La selección no modifica la búsqueda del BJN ni envía archivos a ningún servicio.</small></div>';
+}
+
+function limpiarCarpetaLocalBusqueda() {
+  busquedaCarpetaLocalGen += 1;
+  archivosCarpetaLocal = [];
+  nombreCarpetaLocal = '';
+  const input = document.getElementById('local-folder-input');
+  const state = document.getElementById('local-folder-state');
+  const status = document.getElementById('local-folder-status');
+  const results = document.getElementById('local-folder-results');
+  if (input) input.value = '';
+  if (state) state.textContent = 'No elegiste una carpeta. Esta función es opcional y no afecta la búsqueda del BJN.';
+  if (status) status.textContent = '';
+  if (results) results.replaceChildren();
+}
+
+function resaltarCoincidenciaLocal(text, query) {
+  const safe = escapeHtml(text);
+  const terms = listaTerminos(query).filter(term => term.length > 1).map(escapeRegExp).filter(Boolean);
+  if (!terms.length) return safe;
+  const pattern = new RegExp(`(${terms.join('|')})`, 'gi');
+  return safe.replace(pattern, '<mark>$1</mark>');
+}
+
+function escapeRegExp(value) {
+  return String(value || '').replace(/[.*+?^${}()|[\\]\\]/g, '\\$&');
+}
+
+function leerArchivoLocal(file) {
+  const maxBytes = 300 * 1024;
+  return new Promise(resolve => {
+    if (!extensionesTextoLocal().has(extensionArchivoLocal(file.name)) || file.size > maxBytes) {
+      resolve('');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || '').slice(0, maxBytes));
+    reader.onerror = () => resolve('');
+    reader.readAsText(file);
+  });
+}
+
+async function buscarEnCarpetaLocal() {
+  const status = document.getElementById('local-folder-status');
+  const results = document.getElementById('local-folder-results');
+  const query = (document.getElementById('local-files-query')?.value || '').trim();
+  if (!archivosCarpetaLocal.length) {
+    if (status) status.textContent = 'Primero elegí una carpeta local con el botón “Elegir carpeta local para buscar”.';
+    return;
+  }
+  const generation = ++busquedaCarpetaLocalGen;
+  const terms = listaTerminos(query).map(normalizarTexto).filter(Boolean);
+  if (status) status.textContent = `Buscando localmente en ${archivosCarpetaLocal.length} archivo${archivosCarpetaLocal.length === 1 ? '' : 's'}...`;
+  const matches = [];
+  for (const file of archivosCarpetaLocal) {
+    if (generation !== busquedaCarpetaLocalGen) return;
+    const path = rutaArchivoLocal(file);
+    const fileNameCorpus = normalizarTexto(path);
+    const content = await leerArchivoLocal(file);
+    const corpus = normalizarTexto(`${fileNameCorpus} ${content}`);
+    if (!terms.length || terms.every(term => corpus.includes(term))) {
+      matches.push({ file, path, content, filenameMatch: terms.length > 0 && terms.every(term => fileNameCorpus.includes(term)) });
+    }
+    if (matches.length >= 100) break;
+  }
+  if (generation !== busquedaCarpetaLocalGen) return;
+  if (status) status.textContent = `${matches.length} archivo${matches.length === 1 ? '' : 's'} encontrado${matches.length === 1 ? '' : 's'}. La búsqueda se hizo dentro de este navegador.`;
+  if (!results) return;
+  if (!matches.length) {
+    results.innerHTML = '<div class="local-file-result"><strong>No se encontraron coincidencias</strong><small>Probá con otro término o elegí otra carpeta. Los archivos PDF y DOCX se buscan por nombre hasta que se incorpore extracción de texto.</small></div>';
+    return;
+  }
+  results.innerHTML = matches.map(({ path, content, filenameMatch }) => {
+    const preview = content ? content.replace(/\\s+/g, ' ').trim().slice(0, 220) : 'Contenido no leído; coincidencia por nombre o formato no textual.';
+    return `<div class="local-file-result"><strong>${resaltarCoincidenciaLocal(path, query)}</strong><small>${filenameMatch ? 'Coincidencia en el nombre.' : 'Coincidencia en el nombre o contenido legible.'} ${resaltarCoincidenciaLocal(preview, query)}</small></div>`;
+  }).join('');
+}
+
 // ─── Asistente gratuito para formular consultas ─────────────────────────────
 
 const ASISTENTE_STOPWORDS = new Set('decisiones decisión sobre acerca para por con en de del la el las los un una y que qué encontrar casos fallo fallos sentencia sentencias año'.split(' '));
@@ -1430,6 +1586,12 @@ function limpiarIntencionIA(value) {
     .replace(/\bhttps?:\/\/\S+/gi, '')
     .replace(/\s+/g, ' ')
     .trim();
+}
+
+function reiniciarChatIA() {
+  const chat = document.getElementById('ai-chat');
+  if (!chat) return;
+  chat.innerHTML = '<div class="ai-message ai-message-assistant">Podés describir el tema que necesitás investigar. Te devolveré una propuesta revisable para el buscador.</div>';
 }
 
 function agregarMensajeIA(role, text) {
@@ -1481,6 +1643,7 @@ async function generarSugerenciaConsulta() {
     return;
   }
 
+  reiniciarChatIA();
   agregarMensajeIA('user', intention);
   const submitButton = document.getElementById('ai-submit');
   if (submitButton) submitButton.disabled = true;
