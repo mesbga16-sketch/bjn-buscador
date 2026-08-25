@@ -408,8 +408,74 @@
     flex-shrink: 0;
     margin-top: 1px;
   }
+  .tool-panel {
+    background: #f8fafc;
+    border: 1px solid var(--borde);
+    border-radius: 6px;
+    margin-top: 12px;
+    padding: 0;
+  }
+  .tool-panel summary {
+    cursor: pointer;
+    color: var(--azul);
+    font-weight: 700;
+    padding: 11px 14px;
+    list-style-position: inside;
+  }
+  .tool-panel summary:focus-visible { outline-offset: -2px; }
+  .tool-panel[open] summary { border-bottom: 1px solid var(--borde); }
+  .tool-body { padding: 12px 14px 14px; }
+  .tool-help { color: var(--extracto); font-size: 12px; line-height: 1.5; margin-bottom: 10px; }
+  .tool-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 10px 12px;
+  }
+  .tool-grid .wide { grid-column: span 2; }
+  .tool-grid input[type="date"] {
+    border: 1px solid var(--borde);
+    border-radius: 4px;
+    padding: 8px 10px;
+    font: inherit;
+    color: var(--texto);
+    background: white;
+    width: 100%;
+  }
+  textarea {
+    border: 1px solid var(--borde);
+    border-radius: 4px;
+    padding: 8px 10px;
+    font: inherit;
+    color: var(--texto);
+    background: white;
+    width: 100%;
+    min-height: 74px;
+    resize: vertical;
+  }
+  textarea:focus { outline: none; border-color: var(--azul-claro); box-shadow: 0 0 0 2px rgba(37,99,168,0.12); }
+  .tool-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; align-items: center; }
+  .tool-status { color: var(--extracto); font-size: 12px; min-height: 18px; margin-top: 8px; }
+  .workspace-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; align-items: start; }
+  .workspace-list { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
+  .workspace-item { background: white; border: 1px solid var(--borde); border-radius: 4px; padding: 8px 10px; font-size: 12px; line-height: 1.45; }
+  .workspace-item strong { color: var(--azul); }
+  .workspace-item small { color: var(--extracto); display: block; margin-top: 3px; }
+  .result-card-footer { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-top: 9px; padding-top: 8px; border-top: 1px solid #edf0f4; }
+  .result-select-label { font-size: 11px; color: var(--extracto); display: inline-flex; gap: 6px; align-items: center; text-transform: none; letter-spacing: 0; font-weight: 400; }
+  .result-select-label input { width: 16px; height: 16px; accent-color: var(--azul-claro); }
+  .saved-badge { font-size: 11px; color: var(--verde); font-weight: 600; }
+  .compare-panel { background: white; border: 1px solid var(--borde); border-radius: 6px; margin-top: 12px; padding: 14px; }
+  .compare-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+  .compare-cell { border-left: 3px solid var(--azul-claro); padding: 6px 9px; background: #f8fafc; font-size: 12px; line-height: 1.5; }
+  .ai-chip-list { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+  .ai-chip { border: 1px solid #bfdbfe; border-radius: 14px; background: #eff6ff; color: var(--azul); padding: 4px 9px; font-size: 12px; }
+  .notice-soft { background: #fffbeb; border: 1px solid #fde68a; color: #92400e; border-radius: 5px; padding: 9px 11px; font-size: 12px; line-height: 1.5; margin-top: 10px; }
+
   @media (max-width: 640px) {
     .instrucciones-grid { grid-template-columns: 1fr; }
+    .tool-grid { grid-template-columns: 1fr 1fr; }
+    .tool-grid .wide { grid-column: span 2; }
+    .workspace-grid, .compare-grid { grid-template-columns: 1fr; }
   }
 
   @media (max-width: 640px) {
@@ -508,6 +574,67 @@
     <div id="history-simple" class="history-bar"></div>
   </div>
 
+  <!-- Filtros locales sobre el lote recibido -->
+  <details class="tool-panel" id="advanced-filters">
+    <summary>Filtros jurídicos y búsqueda dentro de resultados</summary>
+    <div class="tool-body">
+      <p class="tool-help">Estos filtros refinan el lote recibido del BJN. El buscador conserva la consulta original y muestra cuántos resultados quedaron después del refinamiento.</p>
+      <div class="tool-grid">
+        <div class="field">
+          <label for="f-organo">Órgano / tribunal</label>
+          <input type="text" id="f-organo" placeholder="ej: Suprema Corte, Trabajo 3º" autocomplete="off">
+        </div>
+        <div class="field">
+          <label for="f-proceso">Proceso / materia</label>
+          <input type="text" id="f-proceso" placeholder="ej: proceso laboral" autocomplete="off">
+        </div>
+        <div class="field">
+          <label for="f-identificador">Identificador</label>
+          <input type="text" id="f-identificador" placeholder="ej: 161/2026, SEF" autocomplete="off">
+        </div>
+        <div class="field">
+          <label for="f-excluir">Excluir palabras</label>
+          <input type="text" id="f-excluir" placeholder="separadas por espacios o comas" autocomplete="off">
+        </div>
+        <div class="field">
+          <label for="f-anio-desde">Año desde</label>
+          <input type="number" id="f-anio-desde" min="1800" max="2200" placeholder="ej: 2018">
+        </div>
+        <div class="field">
+          <label for="f-anio-hasta">Año hasta</label>
+          <input type="number" id="f-anio-hasta" min="1800" max="2200" placeholder="ej: 2026">
+        </div>
+        <div class="field wide">
+          <label for="f-en-resultados">Buscar dentro de resultados</label>
+          <input type="text" id="f-en-resultados" placeholder="palabra, órgano, proceso o fragmento del extracto" autocomplete="off" onkeydown="if(event.key==='Enter') aplicarFiltrosResultados()">
+        </div>
+      </div>
+      <div class="tool-actions">
+        <button type="button" class="btn btn-secondary" onclick="aplicarFiltrosResultados()">Aplicar filtros</button>
+        <button type="button" class="btn btn-secondary" onclick="limpiarFiltrosResultados()">Limpiar filtros</button>
+      </div>
+      <div id="results-filter-status" class="tool-status" role="status" aria-live="polite"></div>
+    </div>
+  </details>
+
+  <!-- Asistente local para formular consultas -->
+  <details class="tool-panel" id="query-assistant">
+    <summary>Asistente gratuito para formular la consulta</summary>
+    <div class="tool-body">
+      <p class="tool-help">Funciona dentro del navegador, sin cuenta y sin enviar este texto a un servicio externo. Propone términos y filtros orientativos; la búsqueda solo se ejecuta cuando vos la confirmás.</p>
+      <div class="field">
+        <label for="ai-intencion">Describí qué necesitás encontrar</label>
+        <textarea id="ai-intencion" placeholder="ej: decisiones sobre despido por enfermedad con reclamo de daño moral"></textarea>
+      </div>
+      <div class="tool-actions">
+        <button type="button" class="btn btn-secondary" onclick="generarSugerenciaConsulta()">Proponer búsqueda</button>
+        <button type="button" class="btn btn-secondary" onclick="copiarPromptIA()">Copiar instrucción para otra IA</button>
+        <a class="btn btn-secondary" href="https://chatgpt.com/" target="_blank" rel="noopener noreferrer">Abrir ChatGPT</a>
+      </div>
+      <div id="ai-suggestion" class="tool-status" role="status" aria-live="polite"></div>
+    </div>
+  </details>
+
   <!-- Instrucciones de uso -->
   <div class="instrucciones">
     <div class="instrucciones-titulo" role="button" tabindex="0" aria-expanded="false" aria-controls="instrucciones-body" onclick="toggleInstrucciones()" onkeydown="if(event.key==='Enter'||event.key===' ') { event.preventDefault(); toggleInstrucciones(); }">
@@ -571,6 +698,41 @@
           <button type="button" class="btn-icon" onclick="compartirBusqueda()" title="Copiar enlace a esta búsqueda">&#128279; Compartir</button>
       </div>
     </div>
+
+    <!-- Organización local de resultados -->
+    <details class="tool-panel" id="workspace-panel">
+      <summary>Carpetas, marcadores, notas y comparación local</summary>
+      <div class="tool-body">
+        <p class="tool-help">Las carpetas y notas se guardan únicamente en este navegador. Podés crear las carpetas que necesites, guardar resultados y exportar una investigación a una carpeta del equipo cuando el navegador lo permita.</p>
+        <div class="workspace-grid">
+          <div>
+            <div class="field">
+              <label for="workspace-folder-name">Nueva carpeta</label>
+              <input type="text" id="workspace-folder-name" placeholder="ej: Despido abusivo 2026" autocomplete="off">
+            </div>
+            <div class="tool-actions">
+              <button type="button" class="btn btn-secondary" onclick="crearCarpetaLocal()">Crear carpeta</button>
+            </div>
+            <div id="workspace-folders" class="workspace-list" aria-live="polite"></div>
+          </div>
+          <div>
+            <div class="field">
+              <label for="workspace-folder">Guardar en carpeta</label>
+              <select id="workspace-folder"></select>
+            </div>
+            <div class="tool-actions">
+              <button type="button" class="btn btn-secondary" onclick="guardarSeleccionados()">Guardar marcados</button>
+              <button type="button" class="btn btn-secondary" onclick="compararMarcados()">Comparar marcados</button>
+              <button type="button" class="btn btn-secondary" onclick="exportarInvestigacion()">Exportar investigación</button>
+            </div>
+            <div id="workspace-status" class="tool-status" role="status" aria-live="polite"></div>
+          </div>
+        </div>
+        <div id="workspace-items" class="workspace-list"></div>
+      </div>
+    </details>
+    <div id="compare-panel" class="compare-panel" hidden></div>
+
     <!-- Detalle de sentencia (arriba de la lista para visibilidad inmediata) -->
       <div id="detail-panel" class="detail-panel" aria-live="polite">
       <div class="detail-header">
@@ -615,6 +777,13 @@ let _searchGen = 0;
 let _detailGen = 0;
 let _detailAbort = null;
 let _isBusy    = false;  // true mientras hay un job de búsqueda activo
+
+// Estado local de refinamiento y organización. No se envía al backend BJN.
+let datosResultadosActuales = null;
+let filtrosResultados = {};
+let sugerenciaIAActual = null;
+const WORKSPACE_STORAGE_KEY = 'bjn_workspace_v1';
+let workspaceData = cargarWorkspaceLocal();
 
 // ─── Status con timer ──────────────────────────────────────────────────────
 
@@ -753,6 +922,449 @@ function prepararNuevaBusqueda() {
 
 renderHistory();
 
+// ─── Filtros locales y búsqueda dentro de resultados ───────────────────────
+
+function resultadoId(r, page, index) {
+  return [r.numero || r.titulo || 'resultado', page || 1, index ?? 0].join('|');
+}
+
+function textoCompletoResultado(r) {
+  return normalizarTexto([
+    r.numero, r.titulo, r.tipo, r.tribunal, r.proceso, r.extracto
+  ].filter(Boolean).join(' '));
+}
+
+function extraerAniosResultado(r) {
+  const origen = [r.numero, r.titulo, r.extracto].filter(Boolean).join(' ');
+  return [...new Set(Array.from(origen.matchAll(/\b(?:18|19|20|21)\d{2}\b/g), m => Number(m[0])))];
+}
+
+function obtenerFiltrosResultadosUI() {
+  const leer = id => (document.getElementById(id)?.value || '').trim();
+  const desde = Number(leer('f-anio-desde'));
+  const hasta = Number(leer('f-anio-hasta'));
+  return {
+    organo: leer('f-organo'),
+    proceso: leer('f-proceso'),
+    identificador: leer('f-identificador'),
+    excluir: leer('f-excluir'),
+    enResultados: leer('f-en-resultados'),
+    anioDesde: Number.isFinite(desde) && desde > 0 ? desde : null,
+    anioHasta: Number.isFinite(hasta) && hasta > 0 ? hasta : null,
+  };
+}
+
+function filtrosResultadosActivos(filtros = filtrosResultados) {
+  return Object.values(filtros || {}).some(value => value !== null && value !== undefined && String(value).trim() !== '');
+}
+
+function coincideFiltrosResultado(r, filtros) {
+  const tribunal = normalizarTexto(r.tribunal || '');
+  const proceso = normalizarTexto(r.proceso || '');
+  const corpus = textoCompletoResultado(r);
+  const identificador = normalizarTexto(r.numero || r.titulo || '').replace(/[^a-z0-9]/g, '');
+
+  if (filtros.organo && !tribunal.includes(normalizarTexto(filtros.organo))) return false;
+  if (filtros.proceso && !proceso.includes(normalizarTexto(filtros.proceso))) return false;
+  if (filtros.identificador) {
+    const buscado = normalizarTexto(filtros.identificador).replace(/[^a-z0-9]/g, '');
+    if (!identificador.includes(buscado) && !corpus.includes(normalizarTexto(filtros.identificador))) return false;
+  }
+
+  const excluir = listaTerminos(filtros.excluir);
+  if (excluir.some(term => corpus.includes(normalizarTexto(term)))) return false;
+
+  const dentro = listaTerminos(filtros.enResultados);
+  if (dentro.some(term => !corpus.includes(normalizarTexto(term)))) return false;
+
+  const anios = extraerAniosResultado(r);
+  if (filtros.anioDesde !== null || filtros.anioHasta !== null) {
+    if (!anios.length) return false;
+    const desde = filtros.anioDesde ?? 0;
+    const hasta = filtros.anioHasta ?? 9999;
+    if (!anios.some(anio => anio >= desde && anio <= hasta)) return false;
+  }
+  return true;
+}
+
+function listaTerminos(value) {
+  return String(value || '').split(/[\s,;]+/).map(item => item.trim()).filter(Boolean);
+}
+
+function aplicarFiltrosResultados() {
+  if (!datosResultadosActuales || !Array.isArray(datosResultadosActuales.results)) {
+    const status = document.getElementById('results-filter-status');
+    if (status) status.textContent = 'Primero ejecutá una búsqueda para filtrar sus resultados.';
+    return;
+  }
+  filtrosResultados = obtenerFiltrosResultadosUI();
+  actualizarUrlConFiltros();
+  renderResults(datosResultadosActuales);
+}
+
+function limpiarFiltrosResultados() {
+  limpiarControlesFiltros();
+  filtrosResultados = {};
+  actualizarUrlConFiltros();
+  if (datosResultadosActuales) renderResults(datosResultadosActuales);
+}
+
+function limpiarControlesFiltros() {
+  ['f-organo', 'f-proceso', 'f-identificador', 'f-excluir', 'f-en-resultados', 'f-anio-desde', 'f-anio-hasta']
+    .forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+}
+
+function filtrosToParams(params, filtros = filtrosResultados) {
+  const mapping = { organo: 'fo', proceso: 'fp', identificador: 'fi', excluir: 'fe', enResultados: 'fr' };
+  Object.entries(mapping).forEach(([key, name]) => {
+    if (filtros?.[key]) params.set(name, filtros[key]);
+  });
+  if (filtros?.anioDesde) params.set('fd', String(filtros.anioDesde));
+  if (filtros?.anioHasta) params.set('fh', String(filtros.anioHasta));
+  return params;
+}
+
+function filtrosFromParams(params) {
+  const value = name => params.get(name) || '';
+  const numeric = name => {
+    const parsed = Number(params.get(name));
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+  };
+  return {
+    organo: value('fo'),
+    proceso: value('fp'),
+    identificador: value('fi'),
+    excluir: value('fe'),
+    enResultados: value('fr'),
+    anioDesde: numeric('fd'),
+    anioHasta: numeric('fh'),
+  };
+}
+
+function aplicarFiltrosEnControles(filtros) {
+  const values = {
+    'f-organo': filtros.organo || '',
+    'f-proceso': filtros.proceso || '',
+    'f-identificador': filtros.identificador || '',
+    'f-excluir': filtros.excluir || '',
+    'f-en-resultados': filtros.enResultados || '',
+    'f-anio-desde': filtros.anioDesde || '',
+    'f-anio-hasta': filtros.anioHasta || '',
+  };
+  Object.entries(values).forEach(([id, value]) => { const el = document.getElementById(id); if (el) el.value = value; });
+}
+
+function actualizarUrlConFiltros() {
+  const params = payloadToParams(ultimaBusqueda || buildPayload());
+  filtrosToParams(params);
+  const query = params.toString();
+  window.history.replaceState(null, '', query ? `${window.location.pathname}?${query}` : window.location.pathname);
+}
+
+// ─── Carpetas, marcadores y notas locales ───────────────────────────────────
+
+function workspaceInicial() {
+  return {
+    folders: [{ id: 'marcadores', name: 'Mis marcadores', createdAt: Date.now() }],
+    items: [],
+    marked: [],
+  };
+}
+
+function cargarWorkspaceLocal() {
+  try {
+    const raw = localStorage.getItem(WORKSPACE_STORAGE_KEY);
+    const parsed = raw ? JSON.parse(raw) : null;
+    if (!parsed || !Array.isArray(parsed.folders) || !Array.isArray(parsed.items)) return workspaceInicial();
+    if (!Array.isArray(parsed.marked)) parsed.marked = [];
+    if (!parsed.folders.length) parsed.folders = workspaceInicial().folders;
+    return parsed;
+  } catch (error) {
+    return workspaceInicial();
+  }
+}
+
+function guardarWorkspaceLocal() {
+  try { localStorage.setItem(WORKSPACE_STORAGE_KEY, JSON.stringify(workspaceData)); } catch (error) {}
+}
+
+function resultadoActualPorId(id) {
+  const all = datosResultadosActuales?.results || [];
+  return all.find((r, index) => {
+    const page = Number.isInteger(r._bjn_page) ? r._bjn_page : 1;
+    const sourceIndex = Number.isInteger(r._bjn_index) ? r._bjn_index : index;
+    return resultadoId(r, page, sourceIndex) === id;
+  }) || null;
+}
+
+function resultadoCompacto(r) {
+  return {
+    numero: r.numero || '',
+    titulo: r.titulo || '',
+    tipo: r.tipo || '',
+    tribunal: r.tribunal || '',
+    proceso: r.proceso || '',
+    extracto: r.extracto || '',
+    sourcePage: Number.isInteger(r._bjn_page) ? r._bjn_page : 1,
+    sourceIndex: Number.isInteger(r._bjn_index) ? r._bjn_index : 0,
+  };
+}
+
+function obtenerMarcados() {
+  return Array.from(document.querySelectorAll('.result-mark:checked')).map(input => {
+    const id = input.closest('.result-card')?.dataset.resultId;
+    const r = id ? resultadoActualPorId(id) : null;
+    return r ? { id, result: r } : null;
+  }).filter(Boolean);
+}
+
+function actualizarEstadoMarcado(input) {
+  const id = input.closest('.result-card')?.dataset.resultId;
+  if (!id) return;
+  workspaceData.marked = workspaceData.marked.filter(item => item !== id);
+  if (input.checked) workspaceData.marked.push(id);
+  guardarWorkspaceLocal();
+  actualizarVistaMarcados();
+}
+
+function actualizarVistaMarcados() {
+  const marcados = new Set(workspaceData.marked || []);
+  document.querySelectorAll('.result-card').forEach(card => {
+    const id = card.dataset.resultId;
+    const checkbox = card.querySelector('.result-mark');
+    if (checkbox) checkbox.checked = marcados.has(id);
+    const badge = card.querySelector('.saved-badge');
+    if (badge) {
+      const saved = workspaceData.items.some(item => item.resultId === id);
+      badge.textContent = saved ? 'Guardado en carpeta' : '';
+    }
+  });
+  const status = document.getElementById('results-filter-status');
+  if (status && datosResultadosActuales) {
+    status.textContent = `${marcados.size} resultado${marcados.size === 1 ? '' : 's'} marcado${marcados.size === 1 ? '' : 's'} localmente.`;
+  }
+}
+
+function crearCarpetaLocal() {
+  const input = document.getElementById('workspace-folder-name');
+  const name = (input?.value || '').trim();
+  if (!name) {
+    mostrarEstadoWorkspace('Escribí un nombre para la carpeta.');
+    return;
+  }
+  if (workspaceData.folders.some(folder => normalizarTexto(folder.name) === normalizarTexto(name))) {
+    mostrarEstadoWorkspace('Ya existe una carpeta con ese nombre.');
+    return;
+  }
+  workspaceData.folders.push({ id: `folder-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, name, createdAt: Date.now() });
+  guardarWorkspaceLocal();
+  if (input) input.value = '';
+  renderWorkspace();
+  mostrarEstadoWorkspace(`Carpeta “${name}” creada en este navegador.`);
+}
+
+function renderWorkspace() {
+  const select = document.getElementById('workspace-folder');
+  const folders = document.getElementById('workspace-folders');
+  if (select) {
+    const selected = select.value;
+    select.innerHTML = workspaceData.folders.map(folder => `<option value="${escapeHtml(folder.id)}">${escapeHtml(folder.name)}</option>`).join('');
+    if (workspaceData.folders.some(folder => folder.id === selected)) select.value = selected;
+  }
+  if (folders) {
+    folders.innerHTML = workspaceData.folders.map(folder => {
+      const count = workspaceData.items.filter(item => item.folderId === folder.id).length;
+      const canDelete = folder.id !== 'marcadores';
+      return `<div class="workspace-item"><strong>${escapeHtml(folder.name)}</strong><small>${count} resultado${count === 1 ? '' : 's'} guardado${count === 1 ? '' : 's'}${canDelete ? ` · <button type="button" class="btn-icon" onclick="eliminarCarpetaLocal('${escapeHtml(folder.id)}')">Eliminar</button>` : ''}</small></div>`;
+    }).join('');
+  }
+  renderWorkspaceItems();
+}
+
+function renderWorkspaceItems() {
+  const list = document.getElementById('workspace-items');
+  if (!list) return;
+  if (!workspaceData.items.length) {
+    list.innerHTML = '<div class="workspace-item"><small>Aún no hay resultados guardados. Marcá una tarjeta y elegí una carpeta.</small></div>';
+    return;
+  }
+  list.innerHTML = workspaceData.items.map(item => {
+    const r = item.result || {};
+    const folder = workspaceData.folders.find(f => f.id === item.folderId);
+    return `<div class="workspace-item" data-workspace-item="${escapeHtml(item.id)}">
+      <strong>${escapeHtml(r.numero || r.titulo || 'Resultado sin identificador')}</strong>
+      <small>${escapeHtml(r.tribunal || '')}${r.proceso ? ` · ${escapeHtml(r.proceso)}` : ''} · ${escapeHtml(folder?.name || 'Carpeta eliminada')}</small>
+      <textarea aria-label="Nota para ${escapeHtml(r.numero || 'resultado')}" placeholder="Nota privada opcional" oninput="guardarNotaLocal('${escapeHtml(item.id)}', this.value)">${escapeHtml(item.note || '')}</textarea>
+      <div class="tool-actions"><button type="button" class="btn-icon" onclick="eliminarGuardadoLocal('${escapeHtml(item.id)}')">Quitar de carpeta</button></div>
+    </div>`;
+  }).join('');
+}
+
+function mostrarEstadoWorkspace(message) {
+  const status = document.getElementById('workspace-status');
+  if (status) status.textContent = message;
+}
+
+function guardarSeleccionados() {
+  const folderId = document.getElementById('workspace-folder')?.value || workspaceData.folders[0]?.id;
+  const selected = obtenerMarcados();
+  if (!folderId || !selected.length) {
+    mostrarEstadoWorkspace('Marcá al menos un resultado y elegí una carpeta.');
+    return;
+  }
+  selected.forEach(({ id, result }) => {
+    const existing = workspaceData.items.find(item => item.resultId === id && item.folderId === folderId);
+    if (existing) existing.result = resultadoCompacto(result);
+    else workspaceData.items.push({ id: `item-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, resultId: id, folderId, result: resultadoCompacto(result), note: '', createdAt: Date.now(), sourceSearchUrl: window.location.href });
+  });
+  guardarWorkspaceLocal();
+  renderWorkspace();
+  actualizarVistaMarcados();
+  mostrarEstadoWorkspace(`${selected.length} resultado${selected.length === 1 ? '' : 's'} guardado${selected.length === 1 ? '' : 's'}.`);
+}
+
+function guardarNotaLocal(itemId, note) {
+  const item = workspaceData.items.find(entry => entry.id === itemId);
+  if (!item) return;
+  item.note = note;
+  guardarWorkspaceLocal();
+}
+
+function eliminarGuardadoLocal(itemId) {
+  workspaceData.items = workspaceData.items.filter(item => item.id !== itemId);
+  guardarWorkspaceLocal();
+  renderWorkspace();
+  actualizarVistaMarcados();
+  mostrarEstadoWorkspace('Resultado quitado de la carpeta.');
+}
+
+function eliminarCarpetaLocal(folderId) {
+  if (folderId === 'marcadores') return;
+  const fallback = workspaceData.folders.find(folder => folder.id === 'marcadores')?.id;
+  workspaceData.items.forEach(item => { if (item.folderId === folderId) item.folderId = fallback; });
+  workspaceData.folders = workspaceData.folders.filter(folder => folder.id !== folderId);
+  guardarWorkspaceLocal();
+  renderWorkspace();
+  mostrarEstadoWorkspace('La carpeta fue eliminada; sus resultados quedaron en Mis marcadores.');
+}
+
+function compararMarcados() {
+  const selected = obtenerMarcados();
+  const panel = document.getElementById('compare-panel');
+  if (!panel) return;
+  if (selected.length < 2 || selected.length > 3) {
+    panel.hidden = false;
+    panel.innerHTML = '<strong>Comparación:</strong> marcá dos o tres resultados para ver sus datos lado a lado.';
+    return;
+  }
+  panel.hidden = false;
+  panel.innerHTML = `<strong>Comparación descriptiva</strong><p class="tool-help">La comparación muestra datos recibidos del BJN. No determina analogía, precedente ni resultado.</p><div class="compare-grid">${selected.map(({ result }) => `<div class="compare-cell"><strong>${escapeHtml(result.numero || result.titulo || 'Sin identificador')}</strong><br>${escapeHtml(result.tribunal || 'Órgano no identificado')}<br>${escapeHtml(result.proceso || 'Proceso no identificado')}<br><br>${escapeHtml(result.extracto || 'Sin extracto disponible')}</div>`).join('')}</div>`;
+  panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+async function exportarInvestigacion() {
+  const items = workspaceData.items;
+  if (!items.length) {
+    mostrarEstadoWorkspace('Guardá al menos un resultado antes de exportar.');
+    return;
+  }
+  const payload = {
+    exportedAt: new Date().toISOString(),
+    sourceSearchUrl: window.location.href,
+    query: ultimaBusqueda || null,
+    folders: workspaceData.folders,
+    items,
+    methodology: 'Resultados públicos consultados en BJN en tiempo real; notas y organización pertenecen al usuario; la selección no representa la totalidad del corpus.',
+  };
+  const content = JSON.stringify(payload, null, 2);
+  const fileName = `investigacion-bjn-${new Date().toISOString().slice(0, 10)}.json`;
+  try {
+    if (window.showDirectoryPicker) {
+      const directory = await window.showDirectoryPicker({ mode: 'readwrite' });
+      const fileHandle = await directory.getFileHandle(fileName, { create: true });
+      const writable = await fileHandle.createWritable();
+      await writable.write(content);
+      await writable.close();
+      mostrarEstadoWorkspace('Investigación exportada a la carpeta elegida.');
+      return;
+    }
+  } catch (error) {
+    if (error?.name === 'AbortError') return;
+  }
+  const blob = new Blob([content], { type: 'application/json;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = fileName;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+  mostrarEstadoWorkspace('Investigación descargada. El navegador puede permitir elegir la carpeta de destino.');
+}
+
+// ─── Asistente gratuito para formular consultas ─────────────────────────────
+
+const ASISTENTE_STOPWORDS = new Set('decisiones decisión sobre acerca para por con en de del la el las los un una y que qué encontrar casos fallo fallos sentencia sentencias año'.split(' '));
+const TERMINOS_SUGERIDOS = {
+  despido: ['despido', 'despido indirecto', 'despido abusivo'],
+  accidente: ['accidente laboral', 'accidente de trabajo', 'enfermedad profesional'],
+  responsabilidad: ['responsabilidad', 'daño', 'reparación'],
+  contrato: ['contrato', 'incumplimiento', 'resolución'],
+  arrendamiento: ['arrendamiento', 'desalojo', 'alquiler'],
+  familia: ['familia', 'alimentos', 'tenencia'],
+  acoso: ['acoso laboral', 'violencia laboral', 'daño moral'],
+  licencia: ['licencia', 'licencia médica', 'salario'],
+};
+
+function generarSugerenciaConsulta() {
+  const intention = (document.getElementById('ai-intencion')?.value || '').trim();
+  const output = document.getElementById('ai-suggestion');
+  if (!output) return;
+  if (!intention) {
+    output.textContent = 'Describí primero el tema o problema jurídico que querés investigar.';
+    return;
+  }
+  const tokens = listaTerminos(normalizarTexto(intention)).filter(token => token.length > 2 && !ASISTENTE_STOPWORDS.has(token) && !/^\d{4}$/.test(token));
+  const expanded = [];
+  tokens.forEach(token => {
+    const base = normalizarTexto(token);
+    const matches = Object.entries(TERMINOS_SUGERIDOS).find(([key]) => base.includes(key));
+    (matches ? matches[1] : [token]).forEach(value => { if (!expanded.includes(value)) expanded.push(value); });
+  });
+  const uniqueExpanded = [...new Set(expanded)];
+  const texto = uniqueExpanded.slice(0, 8).join(' ') || intention;
+  const yearMatches = intention.match(/\b(?:18|19|20|21)\d{2}\b/g) || [];
+  sugerenciaIAActual = { texto, tipoBusqueda: 'TODAS_LAS_PALABRAS', anioDesde: yearMatches[0] || '', anioHasta: yearMatches[yearMatches.length - 1] || '' };
+  output.innerHTML = `<div><strong>Propuesta:</strong> ${escapeHtml(texto)}</div><div class="ai-chip-list">${uniqueExpanded.slice(0, 8).map(term => `<span class="ai-chip">${escapeHtml(term)}</span>`).join('')}</div><div class="tool-actions"><button type="button" class="btn btn-secondary" onclick="usarSugerenciaIA()">Usar esta propuesta en el buscador</button></div><small>La propuesta se generó localmente con reglas de términos; no es un análisis jurídico ni una conclusión.</small>`;
+}
+
+function usarSugerenciaIA() {
+  if (!sugerenciaIAActual) return;
+  const texto = document.getElementById('s-texto');
+  const tipo = document.getElementById('s-tipo');
+  if (texto) texto.value = sugerenciaIAActual.texto;
+  if (tipo) tipo.value = sugerenciaIAActual.tipoBusqueda;
+  const desde = document.getElementById('f-anio-desde');
+  const hasta = document.getElementById('f-anio-hasta');
+  if (desde) desde.value = sugerenciaIAActual.anioDesde;
+  if (hasta) hasta.value = sugerenciaIAActual.anioHasta;
+  document.getElementById('advanced-filters')?.setAttribute('open', '');
+  showToast('Propuesta cargada. Revisá los términos y presioná Buscar.');
+  texto?.focus();
+}
+
+function copiarPromptIA() {
+  const intention = (document.getElementById('ai-intencion')?.value || '').trim();
+  if (!intention) {
+    const output = document.getElementById('ai-suggestion');
+    if (output) output.textContent = 'Escribí una intención de búsqueda antes de copiar la instrucción.';
+    return;
+  }
+  const prompt = `Actuá como asistente de búsqueda jurídica. Convertí la siguiente intención en términos de búsqueda, sinónimos posibles, tipo de búsqueda, órgano o tribunal si surge, proceso y período. No inventes normas, sentencias ni hechos. Entregá solo sugerencias para que una persona las revise antes de consultar el BJN. Intención: ${intention}`;
+  navigator.clipboard.writeText(prompt).then(() => showToast('Instrucción copiada. Podés pegarla en tu cuenta de IA.')).catch(() => window.prompt('Copiá esta instrucción:', prompt));
+}
+
 // ─── URL params (compartir búsqueda) ──────────────────────────────────────
 
 function buildPayload() {
@@ -836,6 +1448,8 @@ function loadFromParams() {
   document.getElementById('s-ordenar').value       = params.get('o') || 'RELEVANCIA';
   document.getElementById('s-paginas').value       = params.get('p') || '2';
   document.getElementById('s-sinonimos').checked     = params.get('s') === '1';
+  filtrosResultados = filtrosFromParams(params);
+  aplicarFiltrosEnControles(filtrosResultados);
   const payload = buildPayload();
   if (restoreCachedResults(payload)) return;
   buscar();
@@ -849,6 +1463,7 @@ function compartirBusqueda() {
   if (!ultimaBusqueda) return;
   const params = payloadToParams(ultimaBusqueda);
   // Construir la URL de compartir sin modificar la URL actual de la página
+  filtrosToParams(params);
   const url    = `${window.location.origin}${window.location.pathname}?${params.toString()}`;
   navigator.clipboard.writeText(url)
     .then(() => showToast('Enlace copiado al portapapeles'))
@@ -952,8 +1567,10 @@ async function buscar() {
 
     histAdd(payload);
     setStatus('', '');
-    const sharedParams = payloadToParams(payload).toString();
-    history.replaceState(null, '', `${window.location.pathname}${sharedParams ? `?${sharedParams}` : ''}`);
+    const sharedParams = payloadToParams(payload);
+    filtrosToParams(sharedParams);
+    const sharedQuery = sharedParams.toString();
+    history.replaceState(null, '', `${window.location.pathname}${sharedQuery ? `?${sharedQuery}` : ''}`);
     cacheResults(payload, data);
     renderResults(data);
   } catch (e) {
@@ -1097,18 +1714,22 @@ function renderResults(data) {
   const area  = document.getElementById('results-area');
   const list  = document.getElementById('result-list');
   const count = document.getElementById('results-count');
+  datosResultadosActuales = data;
 
   const filtroTipo = ultimaBusqueda?.tipoSentencia || '';
-  const resultados = filtroTipo
-    ? data.results.filter(r => matchTipoSentencia(r, filtroTipo))
-    : data.results;
+  const resultados = (data.results || []).filter(r =>
+    matchTipoSentencia(r, filtroTipo) && coincideFiltrosResultado(r, filtrosResultados || {})
+  );
 
   const total = resultados.length;
   const totalOriginal = data.results.length;
 
   let countHtml = `<strong>${total}</strong> resultado${total !== 1 ? 's' : ''} encontrado${total !== 1 ? 's' : ''}`;
   if (filtroTipo && totalOriginal !== total) {
-    countHtml += ` <span style="color:#6b7280; font-size:12px;">(${totalOriginal} sin filtro de tipo)</span>`;
+    countHtml += ` <span style="color:#6b7280; font-size:12px;">(${totalOriginal} antes del filtro de tipo)</span>`;
+  }
+  if (filtrosResultadosActivos() && totalOriginal !== total) {
+    countHtml += ` <span style="color:#6b7280; font-size:12px;">(${totalOriginal} recibidos del BJN)</span>`;
   }
   if (Number(data.pages_loaded || 1) > 1) {
     countHtml += ` <span style="color:#6b7280; font-size:12px;">(${data.pages_loaded} páginas del BJN cargadas)</span>`;
@@ -1117,7 +1738,7 @@ function renderResults(data) {
   list.innerHTML  = '';
 
   if (total === 0) {
-    list.innerHTML = '<div style="padding:20px; color:#666; text-align:center;">Sin resultados para los criterios ingresados.</div>';
+    list.innerHTML = `<div style="padding:20px; color:#666; text-align:center;">Sin resultados visibles con los criterios actuales.${filtrosResultadosActivos() ? ' Probá limpiar los filtros locales.' : ''}</div>`;
   } else {
     // Hint de clic solo en la primera carga de resultados
     if (!document.getElementById('hint-clic')) {
@@ -1136,6 +1757,10 @@ function renderResults(data) {
       card.setAttribute('aria-label', `Abrir sentencia ${r.numero || 'sin número'}`);
       const sourceIndex = Number.isInteger(r._bjn_index) ? r._bjn_index : data.results.indexOf(r);
       const sourcePage = Number.isInteger(r._bjn_page) ? r._bjn_page : 1;
+      const resultId = resultadoId(r, sourcePage, sourceIndex);
+      card.dataset.resultId = resultId;
+      card.dataset.sourcePage = String(sourcePage);
+      card.dataset.sourceIndex = String(sourceIndex);
       card.onclick   = () => cargarDetalle(sourceIndex, card, sourcePage);
       card.onkeydown = (event) => {
         if (event.key === 'Enter' || event.key === ' ') {
@@ -1162,12 +1787,21 @@ function renderResults(data) {
         </div>
         ${r.proceso ? `<div class="result-proceso">${escapeHtml(r.proceso)}</div>` : ''}
         <div class="result-extracto">${highlight(r.extracto || '', ultimaBusqueda?.texto)}</div>
+        <div class="result-card-footer">
+          <label class="result-select-label" onclick="event.stopPropagation()">
+            <input type="checkbox" class="result-mark" id="mark-${sourcePage}-${sourceIndex}" aria-label="Marcar sentencia ${escapeHtml(r.numero || 'sin número')}" onchange="actualizarEstadoMarcado(this)">
+            <span>Marcar para carpeta o comparación</span>
+          </label>
+          <span class="saved-badge" id="saved-${sourcePage}-${sourceIndex}"></span>
+        </div>
       `;
       list.appendChild(card);
     });
+    actualizarVistaMarcados();
   }
 
   area.style.display = 'block';
+  renderWorkspace();
   renderPagination(data.pagination);
 }
 
@@ -1313,8 +1947,11 @@ function toggleInstrucciones() {
 
 // ─── Inicialización ────────────────────────────────────────────────────────
 
-// Cargar búsqueda desde URL si existe (enlace compartido)
-window.addEventListener('DOMContentLoaded', loadFromParams);
+// Cargar organización local y búsqueda desde URL si existe (enlace compartido).
+window.addEventListener('DOMContentLoaded', () => {
+  renderWorkspace();
+  loadFromParams();
+});
 </script>
 
 </body>
