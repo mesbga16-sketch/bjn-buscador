@@ -23,6 +23,16 @@ BJN_SIMPLE = 'https://bjn.poderjudicial.gub.uy/BJNPUBLICA/busquedaSimple.seam'
 IMPO_BASE = 'https://impo.com.uy/bases'
 IMPO_TIPO_PATH = {'ley': 'leyes', 'decreto': 'decretos', 'decreto_ley': 'decretos-ley'}
 
+# IA opcional: la clave permanece en las variables del servidor y nunca se envía al frontend.
+AI_API_KEY = os.environ.get('OPENAI_API_KEY', '').strip()
+AI_API_BASE = os.environ.get('OPENAI_API_BASE', 'https://api.openai.com/v1').rstrip('/')
+AI_MODEL = os.environ.get('BJN_AI_MODEL', 'gpt-4o-mini').strip()
+AI_MAX_INPUT_CHARS = int(os.environ.get('BJN_AI_MAX_INPUT_CHARS', '6000'))
+AI_WINDOW_SECONDS = int(os.environ.get('BJN_AI_WINDOW_SECONDS', '60'))
+AI_MAX_REQUESTS_PER_WINDOW = int(os.environ.get('BJN_AI_MAX_REQUESTS_PER_WINDOW', '8'))
+_ai_requests = {}
+_ai_requests_lock = threading.Lock()
+
 # ─── Job store ────────────────────────────────────────────────────────────────
 JOB_TTL_SECONDS = int(os.environ.get('JOB_TTL_SECONDS', '300'))
 _jobs      = {}
@@ -959,6 +969,91 @@ def verificar():
         return jsonify({'error': 'Ingrese un texto para verificar.'}), 400
     jid = _submit_job({'type': 'verificar', 'texto': texto})
     return jsonify({'job_id': jid})
+
+@app.route('/api/ia/estado', methods=['GET'])
+def ia_estado():
+    """Indica si existe una configuración de IA generativa sin revelar secretos."""
+    return jsonify({
+        'configured': bool(AI_API_KEY),
+        'mode': 'server' if AI_API_KEY else 'local',
+        'provider_configured': bool(AI_API_KEY),
+    })
+
+
+def _ia_rate_allowed(client_id):
+    now = time.monotonic()
+    with _ai_requests_lock:
+        recent = [stamp for stamp in _ai_requests.get(client_id, []) if now - stamp < AI_WINDOW_SECONDS]
+        if len(recent) >= AI_MAX_REQUESTS_PER_WINDOW:
+            _ai_requests[client_id] = recent
+            return False
+        recent.append(now)
+        _ai_requests[client_id] = recent
+        # Evita que una instancia pública acumule identificadores inactivos.
+        if len(_ai_requests) > 500:
+            for key, stamps in list(_ai_requests.items()):
+                if not stamps or now - stamps[-1] >= AI_WINDOW_SECONDS:
+                    _ai_requests.pop(key, None)
+        return True
+
+
+@app.route('/api/ia/consulta', methods=['POST'])
+def ia_consulta():
+    """Genera una sugerencia de búsqueda solo si el servicio fue configurado por su administrador."""
+    if not AI_API_KEY:
+        return jsonify({
+            'error': 'La IA generativa no está configurada en este servicio. Podés usar el asistente local gratuito o tu cuenta externa.',
+            'mode': 'local',
+        }), 503
+
+    data = request.get_json(silent=True) or {}
+    intention = str(data.get('intention', '')).strip()
+    if not intention:
+        return jsonify({'error': 'Describí primero la búsqueda que querés formular.'}), 400
+    if len(intention) > AI_MAX_INPUT_CHARS:
+        return jsonify({'error': f'La descripción no puede superar {AI_MAX_INPUT_CHARS} caracteres.'}), 413
+
+    client_id = request.headers.get('X-Forwarded-For', request.remote_addr or 'anonymous').split(',')[0].strip()
+    if not _ia_rate_allowed(client_id):
+        return jsonify({'error': 'Se alcanzó el límite temporal de consultas de IA. Esperá un momento y reintentá.'}), 429
+
+    system_prompt = (
+        'Sos un asistente de formulación de búsquedas para la Base de Jurisprudencia Nacional de Uruguay. '
+        'No sos juez, no das asesoramiento jurídico, no predices resultados y no recomendás qué resolver. '
+        'Convertí la intención en una propuesta revisable: términos principales, sinónimos, órganos o procesos solo si surgen, '
+        'rango temporal solo si aparece y una advertencia sobre datos faltantes. No inventes normas, sentencias, hechos, órganos ni fechas. '
+        'Respondé en español claro, con secciones breves y sin afirmar que una cita fue verificada.'
+    )
+    body = {
+        'model': AI_MODEL,
+        'messages': [
+            {'role': 'system', 'content': system_prompt},
+            {'role': 'user', 'content': intention},
+        ],
+        'temperature': 0.2,
+        'max_tokens': 700,
+    }
+    try:
+        with httpx.Client(timeout=45.0) as client:
+            response = client.post(
+                f'{AI_API_BASE}/chat/completions',
+                headers={'Authorization': f'Bearer {AI_API_KEY}', 'Content-Type': 'application/json'},
+                json=body,
+            )
+        response.raise_for_status()
+        payload = response.json()
+        content = ((payload.get('choices') or [{}])[0].get('message') or {}).get('content', '')
+        if isinstance(content, list):
+            content = ''.join(part.get('text', '') for part in content if isinstance(part, dict))
+        content = str(content).strip()
+        if not content:
+            return jsonify({'error': 'La IA no devolvió una propuesta legible.'}), 502
+        return jsonify({'ok': True, 'mode': 'server', 'answer': content[:12000]})
+    except httpx.HTTPStatusError:
+        return jsonify({'error': 'El proveedor de IA rechazó la consulta. La búsqueda del BJN sigue disponible.'}), 502
+    except Exception:
+        return jsonify({'error': 'No fue posible consultar la IA generativa en este momento. La búsqueda del BJN sigue disponible.'}), 502
+
 
 @app.route('/healthz', methods=['GET'])
 def healthz():
