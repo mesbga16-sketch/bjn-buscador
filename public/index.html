@@ -453,7 +453,8 @@
         <input type="text" id="s-texto"
                placeholder="ej: despido abusivo, accidente laboral, responsabilidad estatal..."
                autocomplete="off" aria-describedby="texto-ayuda"
-               onkeydown="if(event.key==='Enter') buscar()">
+               onkeydown="if(event.key==='Enter') buscar()"
+               oninput="prepararNuevaBusqueda()">
         <span id="texto-ayuda" class="sr-only">Ingresá palabras o una frase para consultar el texto de las sentencias.</span>
       </div>
       <button type="button" class="btn btn-primary" onclick="buscar()" style="padding:8px 28px; align-self:flex-end;">Buscar</button>
@@ -732,6 +733,22 @@ function histRemove(idx) {
   items.splice(idx, 1);
   histSave(items);
   renderHistory();
+}
+
+// Cuando el usuario empieza a escribir una consulta distinta, volver al
+// valor inicial para que pueda elegir nuevamente entre 10 y 50 resultados.
+// No se ejecuta al restaurar una URL ni al aplicar una búsqueda del historial,
+// porque esas rutas asignan el valor deliberadamente antes de buscar.
+function prepararNuevaBusqueda() {
+  const campoTexto = document.getElementById('s-texto');
+  const selectorPaginas = document.getElementById('s-paginas');
+  if (!campoTexto || !selectorPaginas || !ultimaBusqueda) return;
+
+  const textoActual = campoTexto.value.trim();
+  const textoAnterior = String(ultimaBusqueda.texto || '').trim();
+  if (textoActual !== textoAnterior) {
+    selectorPaginas.value = '2';
+  }
 }
 
 renderHistory();
