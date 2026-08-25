@@ -489,6 +489,11 @@
   .ai-compose textarea { min-height: 84px; }
   .ai-compose .btn { align-self: stretch; }
   .ai-status-line { color: var(--extracto); font-size: 12px; min-height: 18px; }
+  .ai-purpose { background: #f8fafc; border-left: 4px solid #93c5fd; padding: 10px 12px; font-size: 13px; line-height: 1.55; margin-bottom: 10px; }
+  .ai-purpose strong { color: var(--azul); }
+  .ai-provider-links { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+  .ai-provider-links .btn { flex: 1 1 180px; text-align: center; }
+  .ai-next-step { color: var(--extracto); font-size: 12px; line-height: 1.5; margin-top: 8px; }
   .notice-soft { background: #fffbeb; border: 1px solid #fde68a; color: #92400e; border-radius: 5px; padding: 9px 11px; font-size: 12px; line-height: 1.5; margin-top: 10px; overflow-wrap: anywhere; }
   .local-folder-tool { border: 2px solid #9ec5ef; background: #f5f9ff; }
   .local-folder-tool summary { background: #eaf3ff; }
@@ -696,7 +701,8 @@
       <span class="optional-badge">no decide ni reemplaza la búsqueda</span>
     </summary>
     <div class="tool-body">
-      <p class="tool-help"><strong>Elegí si querés usarlo.</strong> El modo gratuito local funciona dentro de este navegador y propone términos orientativos. No se conecta automáticamente a tu cuenta paga de ChatGPT.</p>
+      <p class="tool-help"><strong>Elegí si querés usarlo.</strong> Es una ayuda para transformar una descripción en lenguaje común (por ejemplo, “despido de trabajador enfermo”) en una búsqueda más ordenada. No decide el caso, no afirma cuál es la solución jurídica y no reemplaza la lectura de las sentencias.</p>
+      <div class="ai-purpose"><strong>¿Qué hace “Preparar búsqueda local”?</strong> Trabaja dentro de este navegador: elimina palabras de relleno, detecta años, agrega términos relacionados que ya están definidos en la herramienta y arma una propuesta revisable. Después podés cargarla en el buscador principal y decidir si presionás <em>Buscar</em>. <strong>No ejecuta la consulta por sí sola y no envía el texto a ningún servicio.</strong></div>
       <div class="ai-chat" id="ai-chat" aria-live="polite">
         <div class="ai-message ai-message-assistant">Podés describir el tema que necesitás investigar. Te devolveré una propuesta revisable para el buscador.</div>
       </div>
@@ -705,12 +711,17 @@
           <label for="ai-intencion">Tu consulta para el asistente (opcional)</label>
           <textarea id="ai-intencion" placeholder="ej: decisiones sobre despido por enfermedad con reclamo de daño moral" onkeydown="if((event.ctrlKey||event.metaKey) && event.key==='Enter') generarSugerenciaConsulta()"></textarea>
         </div>
-        <button type="button" class="btn btn-secondary" id="ai-submit" onclick="generarSugerenciaConsulta()">Generar propuesta local</button>
+        <button type="button" class="btn btn-secondary" id="ai-submit" onclick="generarSugerenciaConsulta()">Preparar búsqueda local</button>
       </div>
       <div class="tool-actions">
         <button type="button" class="btn btn-secondary" onclick="copiarPromptIA()">Copiar instrucción</button>
-        <a class="btn btn-secondary" href="https://chatgpt.com/" target="_blank" rel="noopener noreferrer" onclick="prepararChatGPT(event)">Usar mi cuenta de ChatGPT</a>
       </div>
+      <div class="ai-provider-links" aria-label="Abrir un proveedor externo de IA">
+        <a class="btn btn-secondary" href="https://chatgpt.com/" target="_blank" rel="noopener noreferrer" onclick="prepararProveedorIA(event, 'ChatGPT')">Abrir ChatGPT y copiar instrucción</a>
+        <a class="btn btn-secondary" href="https://claude.ai/" target="_blank" rel="noopener noreferrer" onclick="prepararProveedorIA(event, 'Claude')">Abrir Claude y copiar instrucción</a>
+        <a class="btn btn-secondary" href="https://gemini.google.com/" target="_blank" rel="noopener noreferrer" onclick="prepararProveedorIA(event, 'Gemini')">Abrir Gemini y copiar instrucción</a>
+      </div>
+      <p class="ai-next-step"><strong>Cómo se usan:</strong> la herramienta copia una instrucción limpia, abre el proveedor elegido en otra pestaña y deja el último paso (pegar y enviar) en manos de la persona. No se solicitan contraseñas ni claves de API.</p>
       <div class="notice-soft" id="ai-state" role="status" aria-live="polite"><strong>Estado:</strong> comprobando las opciones de IA disponibles...</div>
       <div id="ai-suggestion" class="tool-status" role="status" aria-live="polite"></div>
     </div>
@@ -1569,7 +1580,7 @@ async function buscarEnCarpetaLocal() {
 
 // ─── Asistente gratuito para formular consultas ─────────────────────────────
 
-const ASISTENTE_STOPWORDS = new Set('decisiones decisión sobre acerca para por con en de del la el las los un una y que qué encontrar casos fallo fallos sentencia sentencias año'.split(' '));
+const ASISTENTE_STOPWORDS = new Set('decisiones decisión sobre acerca para por con en de del la el las los un una y que qué encontrar casos caso fallo fallos sentencia sentencias año durante durante necesito necesitás buscar búsqueda tema material investigar acerca respecto mediante entre'.split(' '));
 const TERMINOS_SUGERIDOS = {
   despido: ['despido', 'despido indirecto', 'despido abusivo'],
   accidente: ['accidente laboral', 'accidente de trabajo', 'enfermedad profesional'],
@@ -1628,7 +1639,10 @@ function mostrarPropuestaLocal(suggestion, explanation = 'La propuesta se gener�
   const output = document.getElementById('ai-suggestion');
   if (!output) return;
   sugerenciaIAActual = suggestion;
-  output.innerHTML = `<div><strong>Propuesta revisable:</strong> ${escapeHtml(suggestion.texto)}</div><div class="ai-chip-list">${suggestion.terms.map(term => `<span class="ai-chip">${escapeHtml(term)}</span>`).join('')}</div><div class="tool-actions"><button type="button" class="btn btn-secondary" onclick="usarSugerenciaIA()">Usar esta propuesta en el buscador</button></div><small>${escapeHtml(explanation)}</small>`;
+  const years = suggestion.anioDesde && suggestion.anioHasta
+    ? `Años detectados: ${suggestion.anioDesde}${suggestion.anioHasta !== suggestion.anioDesde ? ` a ${suggestion.anioHasta}` : ''}.`
+    : 'No se detectó un período; podés completarlo en los filtros opcionales.';
+  output.innerHTML = `<div><strong>Propuesta revisable:</strong> ${escapeHtml(suggestion.texto)}</div><div class="ai-chip-list">${suggestion.terms.map(term => `<span class="ai-chip">${escapeHtml(term)}</span>`).join('')}</div><div class="ai-next-step"><strong>Siguiente paso:</strong> revisá los términos, presioná “Usar esta propuesta en el buscador” y decidí después si querés ejecutar la consulta. ${escapeHtml(years)}</div><div class="tool-actions"><button type="button" class="btn btn-secondary" onclick="usarSugerenciaIA()">Usar esta propuesta en el buscador</button></div><small>${escapeHtml(explanation)}</small>`;
 }
 
 async function generarSugerenciaConsulta() {
@@ -1697,13 +1711,13 @@ async function actualizarEstadoIA() {
       state.innerHTML = '<strong>Estado:</strong> IA generativa del servidor habilitada. La clave queda protegida en el servidor; no se solicitan credenciales al usuario.';
       if (submitButton) submitButton.textContent = 'Consultar IA generativa';
     } else {
-      state.innerHTML = '<strong>Estado:</strong> modo local gratuito. Al usar el botón no se envía el texto a ningún servicio; podés abrir tu cuenta externa de ChatGPT aparte.';
-      if (submitButton) submitButton.textContent = 'Generar propuesta local';
+      state.innerHTML = '<strong>Estado:</strong> modo local gratuito. Al usar el botón no se envía el texto a ningún servicio; podés abrir ChatGPT, Claude o Gemini aparte con una instrucción copiada.';
+      if (submitButton) submitButton.textContent = 'Preparar búsqueda local';
     }
   } catch (error) {
     iaEstado = 'local';
-    state.innerHTML = '<strong>Estado:</strong> modo local gratuito disponible. No se pudo comprobar una IA generativa del servidor; el texto no se enviará a ningún servicio.';
-    if (submitButton) submitButton.textContent = 'Generar propuesta local';
+    state.innerHTML = '<strong>Estado:</strong> modo local gratuito disponible. No se pudo comprobar una IA generativa del servidor; el texto no se enviará a ningún servicio. Podés usar ChatGPT, Claude o Gemini mediante copia y pegado manual.';
+    if (submitButton) submitButton.textContent = 'Preparar búsqueda local';
   }
 }
 
@@ -1737,19 +1751,24 @@ function copiarPromptIA() {
   navigator.clipboard.writeText(prompt).then(() => showToast('Instrucción copiada. Podés pegarla en tu cuenta de IA.')).catch(() => window.prompt('Copiá esta instrucción:', prompt));
 }
 
-function prepararChatGPT(event) {
+function prepararProveedorIA(event, proveedor) {
   const intention = limpiarIntencionIA(document.getElementById('ai-intencion')?.value || '');
   event.preventDefault();
+  const urls = { ChatGPT: 'https://chatgpt.com/', Claude: 'https://claude.ai/', Gemini: 'https://gemini.google.com/' };
   if (!intention) {
-    agregarMensajeIA('assistant', 'Escribí una consulta antes de abrir ChatGPT. Esta página no puede enviar mensajes automáticamente a tu cuenta.');
+    agregarMensajeIA('assistant', `Escribí una consulta antes de abrir ${proveedor}. Esta página no puede enviar mensajes automáticamente a una cuenta externa.`);
     document.getElementById('ai-intencion')?.focus();
     return;
   }
   const prompt = promptBusquedaIA(intention);
-  const chatWindow = window.open('https://chatgpt.com/', '_blank', 'noopener,noreferrer');
+  const providerWindow = window.open(urls[proveedor] || urls.ChatGPT, '_blank', 'noopener,noreferrer');
   navigator.clipboard.writeText(prompt)
-    .then(() => showToast(chatWindow ? 'ChatGPT se abrió. Pegá la instrucción copiada y presioná enviar allí.' : 'La instrucción quedó copiada. Abrí ChatGPT, pegala y presioná enviar.'))
-    .catch(() => window.prompt('Copiá esta instrucción en ChatGPT y presioná enviar:', prompt));
+    .then(() => showToast(providerWindow ? `${proveedor} se abrió. Pegá la instrucción copiada y presioná enviar allí.` : `La instrucción quedó copiada. Abrí ${proveedor}, pegala y presioná enviar.`))
+    .catch(() => window.prompt(`Copiá esta instrucción en ${proveedor} y presioná enviar:`, prompt));
+}
+
+function prepararChatGPT(event) {
+  prepararProveedorIA(event, 'ChatGPT');
 }
 
 // ─── URL params (compartir búsqueda) ──────────────────────────────────────
