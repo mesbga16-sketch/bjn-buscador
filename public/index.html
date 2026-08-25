@@ -465,7 +465,10 @@
   .tool-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; align-items: center; }
   .tool-status { color: var(--extracto); font-size: 12px; min-height: 18px; margin-top: 8px; }
   .workspace-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; align-items: start; }
+  .workspace-search-grid { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(180px, .6fr); gap: 12px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--borde); }
   .workspace-list { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
+  .workspace-scope { color: var(--extracto); font-size: 11px; line-height: 1.45; }
+  .folder-choice-note { color: var(--extracto); font-size: 11px; margin: 3px 0 0; }
   .workspace-item { background: white; border: 1px solid var(--borde); border-radius: 4px; padding: 8px 10px; font-size: 12px; line-height: 1.45; }
   .workspace-item strong { color: var(--azul); }
   .workspace-item small { color: var(--extracto); display: block; margin-top: 3px; }
@@ -492,7 +495,7 @@
     .instrucciones-grid { grid-template-columns: 1fr; }
     .tool-grid { grid-template-columns: 1fr 1fr; }
     .tool-grid .wide { grid-column: span 2; }
-    .workspace-grid, .compare-grid { grid-template-columns: 1fr; }
+    .workspace-grid, .workspace-search-grid, .compare-grid { grid-template-columns: 1fr; }
     .ai-compose { flex-direction: column; align-items: stretch; }
     .ai-compose .btn { width: 100%; }
   }
@@ -659,7 +662,7 @@
           <label for="ai-intencion">Tu consulta para el asistente (opcional)</label>
           <textarea id="ai-intencion" placeholder="ej: decisiones sobre despido por enfermedad con reclamo de daño moral" onkeydown="if((event.ctrlKey||event.metaKey) && event.key==='Enter') generarSugerenciaConsulta()"></textarea>
         </div>
-        <button type="button" class="btn btn-secondary" onclick="generarSugerenciaConsulta()">Enviar al asistente</button>
+        <button type="button" class="btn btn-secondary" id="ai-submit" onclick="generarSugerenciaConsulta()">Generar propuesta local</button>
       </div>
       <div class="tool-actions">
         <button type="button" class="btn btn-secondary" onclick="copiarPromptIA()">Copiar instrucción</button>
@@ -737,13 +740,16 @@
 
     <!-- Organización local de resultados -->
     <details class="tool-panel" id="workspace-panel">
-      <summary>Carpetas, marcadores, notas y comparación local</summary>
+      <summary class="optional-filter-summary">
+        <span>Mis carpetas locales y resultados guardados (opcional)</span>
+        <span class="optional-badge">solo en este navegador</span>
+      </summary>
       <div class="tool-body">
-        <p class="tool-help">Las carpetas y notas se guardan únicamente en este navegador. Podés crear las carpetas que necesites, guardar resultados y exportar una investigación a una carpeta del equipo cuando el navegador lo permita.</p>
+        <p class="tool-help"><strong>Esta sección es opcional.</strong> Podés crear carpetas, guardar resultados marcados y buscar dentro de tus resultados guardados. La organización y las notas quedan en este navegador; no se suben al BJN ni al servidor.</p>
         <div class="workspace-grid">
           <div>
             <div class="field">
-              <label for="workspace-folder-name">Nueva carpeta</label>
+              <label for="workspace-folder-name">Crear carpeta local</label>
               <input type="text" id="workspace-folder-name" placeholder="ej: Despido abusivo 2026" autocomplete="off">
             </div>
             <div class="tool-actions">
@@ -753,17 +759,31 @@
           </div>
           <div>
             <div class="field">
-              <label for="workspace-folder">Guardar en carpeta</label>
+              <label for="workspace-folder">Guardar resultados marcados en</label>
               <select id="workspace-folder"></select>
             </div>
             <div class="tool-actions">
               <button type="button" class="btn btn-secondary" onclick="guardarSeleccionados()">Guardar marcados</button>
               <button type="button" class="btn btn-secondary" onclick="compararMarcados()">Comparar marcados</button>
-              <button type="button" class="btn btn-secondary" onclick="exportarInvestigacion()">Exportar investigación</button>
             </div>
-            <div id="workspace-status" class="tool-status" role="status" aria-live="polite"></div>
           </div>
         </div>
+        <div class="workspace-search-grid">
+          <div class="field">
+            <label for="workspace-search">Buscar en mis resultados guardados (opcional)</label>
+            <input type="search" id="workspace-search" placeholder="número, tribunal, proceso, texto o nota" autocomplete="off" oninput="filtrarWorkspaceItems()">
+          </div>
+          <div class="field">
+            <label for="workspace-folder-filter">Mostrar carpeta (opcional)</label>
+            <select id="workspace-folder-filter" onchange="filtrarWorkspaceItems()"></select>
+          </div>
+        </div>
+        <div class="tool-actions">
+          <button type="button" class="btn btn-secondary" onclick="elegirCarpetaExportacion()">Elegir carpeta del equipo para exportar</button>
+          <button type="button" class="btn btn-secondary" onclick="exportarInvestigacion()">Exportar investigación</button>
+        </div>
+        <p id="workspace-folder-choice" class="folder-choice-note">Carpeta del equipo: todavía no elegida. La selección se usa solo para exportar.</p>
+        <div id="workspace-status" class="tool-status" role="status" aria-live="polite"></div>
         <div id="workspace-items" class="workspace-list"></div>
       </div>
     </details>
@@ -818,6 +838,8 @@ let _isBusy    = false;  // true mientras hay un job de búsqueda activo
 let datosResultadosActuales = null;
 let filtrosResultados = {};
 let sugerenciaIAActual = null;
+let iaEstado = 'unknown';
+let carpetaExportacionHandle = null;
 const WORKSPACE_STORAGE_KEY = 'bjn_workspace_v1';
 let workspaceData = cargarWorkspaceLocal();
 
@@ -1201,11 +1223,17 @@ function crearCarpetaLocal() {
 
 function renderWorkspace() {
   const select = document.getElementById('workspace-folder');
+  const filterSelect = document.getElementById('workspace-folder-filter');
   const folders = document.getElementById('workspace-folders');
   if (select) {
     const selected = select.value;
     select.innerHTML = workspaceData.folders.map(folder => `<option value="${escapeHtml(folder.id)}">${escapeHtml(folder.name)}</option>`).join('');
     if (workspaceData.folders.some(folder => folder.id === selected)) select.value = selected;
+  }
+  if (filterSelect) {
+    const selected = filterSelect.value;
+    filterSelect.innerHTML = '<option value="">Todas las carpetas</option>' + workspaceData.folders.map(folder => `<option value="${escapeHtml(folder.id)}">${escapeHtml(folder.name)}</option>`).join('');
+    if (workspaceData.folders.some(folder => folder.id === selected)) filterSelect.value = selected;
   }
   if (folders) {
     folders.innerHTML = workspaceData.folders.map(folder => {
@@ -1214,17 +1242,37 @@ function renderWorkspace() {
       return `<div class="workspace-item"><strong>${escapeHtml(folder.name)}</strong><small>${count} resultado${count === 1 ? '' : 's'} guardado${count === 1 ? '' : 's'}${canDelete ? ` · <button type="button" class="btn-icon" onclick="eliminarCarpetaLocal('${escapeHtml(folder.id)}')">Eliminar</button>` : ''}</small></div>`;
     }).join('');
   }
-  renderWorkspaceItems();
+  filtrarWorkspaceItems();
 }
 
-function renderWorkspaceItems() {
+function filtrarWorkspaceItems() {
   const list = document.getElementById('workspace-items');
   if (!list) return;
+  const term = normalizarTexto(document.getElementById('workspace-search')?.value || '');
+  const folderId = document.getElementById('workspace-folder-filter')?.value || '';
+  const filtered = workspaceData.items.filter(item => {
+    if (folderId && item.folderId !== folderId) return false;
+    if (!term) return true;
+    const r = item.result || {};
+    const corpus = normalizarTexto([r.numero, r.titulo, r.tipo, r.tribunal, r.proceso, r.extracto, item.note].filter(Boolean).join(' '));
+    return corpus.includes(term);
+  });
+  renderWorkspaceItems(filtered);
+}
+
+function renderWorkspaceItems(itemsOverride = null) {
+  const list = document.getElementById('workspace-items');
+  if (!list) return;
+  const items = Array.isArray(itemsOverride) ? itemsOverride : workspaceData.items;
   if (!workspaceData.items.length) {
     list.innerHTML = '<div class="workspace-item"><small>Aún no hay resultados guardados. Marcá una tarjeta y elegí una carpeta.</small></div>';
     return;
   }
-  list.innerHTML = workspaceData.items.map(item => {
+  if (!items.length) {
+    list.innerHTML = '<div class="workspace-item"><small>No hay resultados guardados que coincidan con esos criterios.</small></div>';
+    return;
+  }
+  list.innerHTML = items.map(item => {
     const r = item.result || {};
     const folder = workspaceData.folders.find(f => f.id === item.folderId);
     return `<div class="workspace-item" data-workspace-item="${escapeHtml(item.id)}">
@@ -1298,6 +1346,28 @@ function compararMarcados() {
   panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
 
+function actualizarEstadoCarpetaExportacion(message) {
+  const choice = document.getElementById('workspace-folder-choice');
+  if (choice) choice.textContent = `Carpeta del equipo: ${message}`;
+}
+
+async function elegirCarpetaExportacion() {
+  if (!window.showDirectoryPicker) {
+    actualizarEstadoCarpetaExportacion('el navegador no permite elegirla directamente; se descargará el archivo');
+    mostrarEstadoWorkspace('Este navegador no permite seleccionar una carpeta desde la página. Podés usar la descarga del archivo.');
+    return null;
+  }
+  try {
+    carpetaExportacionHandle = await window.showDirectoryPicker({ mode: 'readwrite' });
+    actualizarEstadoCarpetaExportacion('seleccionada para esta sesión');
+    mostrarEstadoWorkspace('Carpeta del equipo seleccionada. Ahora podés exportar la investigación.');
+    return carpetaExportacionHandle;
+  } catch (error) {
+    if (error?.name !== 'AbortError') mostrarEstadoWorkspace('No se pudo seleccionar la carpeta del equipo.');
+    return null;
+  }
+}
+
 async function exportarInvestigacion() {
   const items = workspaceData.items;
   if (!items.length) {
@@ -1315,17 +1385,19 @@ async function exportarInvestigacion() {
   const content = JSON.stringify(payload, null, 2);
   const fileName = `investigacion-bjn-${new Date().toISOString().slice(0, 10)}.json`;
   try {
-    if (window.showDirectoryPicker) {
-      const directory = await window.showDirectoryPicker({ mode: 'readwrite' });
+    const directory = carpetaExportacionHandle || (window.showDirectoryPicker ? await elegirCarpetaExportacion() : null);
+    if (directory) {
       const fileHandle = await directory.getFileHandle(fileName, { create: true });
       const writable = await fileHandle.createWritable();
       await writable.write(content);
       await writable.close();
-      mostrarEstadoWorkspace('Investigación exportada a la carpeta elegida.');
+      mostrarEstadoWorkspace('Investigación exportada a la carpeta del equipo elegida.');
       return;
     }
   } catch (error) {
     if (error?.name === 'AbortError') return;
+    carpetaExportacionHandle = null;
+    actualizarEstadoCarpetaExportacion('no disponible; se descargará el archivo');
   }
   const blob = new Blob([content], { type: 'application/json;charset=utf-8' });
   const url = URL.createObjectURL(blob);
@@ -1410,9 +1482,21 @@ async function generarSugerenciaConsulta() {
   }
 
   agregarMensajeIA('user', intention);
-  output.textContent = 'Consultando el asistente...';
-  const submitButton = document.querySelector('#query-assistant .ai-compose .btn');
+  const submitButton = document.getElementById('ai-submit');
   if (submitButton) submitButton.disabled = true;
+
+  // Si no hay proveedor configurado, no hacemos una llamada inútil: el usuario
+  // debe saber que la propuesta se genera en el navegador y no se envía.
+  if (iaEstado === 'unknown') await actualizarEstadoIA();
+  if (iaEstado !== 'server') {
+    const suggestion = generarSugerenciaLocal(intention);
+    agregarMensajeIA('assistant', `No se envió la consulta a ningún servicio externo. Modo local gratuito: propuesta revisable: ${suggestion.texto}`);
+    mostrarPropuestaLocal(suggestion, 'Modo local: esta propuesta se calculó en tu navegador; no es un análisis jurídico ni una conclusión.');
+    if (submitButton) submitButton.disabled = false;
+    return;
+  }
+
+  output.textContent = 'Consultando la IA generativa del servidor...';
   try {
     const response = await fetch('/api/ia/consulta', {
       method: 'POST',
@@ -1426,33 +1510,37 @@ async function generarSugerenciaConsulta() {
       sugerenciaIAActual = null;
       return;
     }
-    if (response.status !== 503 && response.status !== 404) {
-      agregarMensajeIA('assistant', data.error || 'La IA generativa no pudo responder. Se ofrece una propuesta local para no interrumpir la búsqueda.');
-    }
+    agregarMensajeIA('assistant', data.error || 'La IA generativa no pudo responder. Se ofrece una propuesta local para no interrumpir la búsqueda.');
   } catch (error) {
-    agregarMensajeIA('assistant', 'La IA generativa no está disponible en este momento. Se ofrece una propuesta local para no interrumpir la búsqueda.');
+    agregarMensajeIA('assistant', 'La IA generativa no está disponible. Se ofrece una propuesta local para no interrumpir la búsqueda.');
   } finally {
     if (submitButton) submitButton.disabled = false;
   }
 
   const suggestion = generarSugerenciaLocal(intention);
-  agregarMensajeIA('assistant', `Modo local gratuito: puedo ayudarte a convertir la intención en términos revisables. Propuesta: ${suggestion.texto}`);
-  mostrarPropuestaLocal(suggestion);
+  agregarMensajeIA('assistant', `Fallback local: no se pudo completar la IA generativa. Propuesta revisable: ${suggestion.texto}`);
+  mostrarPropuestaLocal(suggestion, 'Fallback local: esta propuesta se calculó en tu navegador; no es un análisis jurídico ni una conclusión.');
 }
 
 async function actualizarEstadoIA() {
   const state = document.getElementById('ai-state');
+  const submitButton = document.getElementById('ai-submit');
   if (!state) return;
   try {
     const response = await fetch('/api/ia/estado', { cache: 'no-store' });
     const data = await response.json();
+    iaEstado = data.configured ? 'server' : 'local';
     if (data.configured) {
       state.innerHTML = '<strong>Estado:</strong> IA generativa del servidor habilitada. La clave queda protegida en el servidor; no se solicitan credenciales al usuario.';
+      if (submitButton) submitButton.textContent = 'Consultar IA generativa';
     } else {
-      state.innerHTML = '<strong>Estado:</strong> modo local gratuito. La IA generativa del servidor no está configurada; podés usar el modo local o abrir tu cuenta externa de ChatGPT.';
+      state.innerHTML = '<strong>Estado:</strong> modo local gratuito. Al usar el botón no se envía el texto a ningún servicio; podés abrir tu cuenta externa de ChatGPT aparte.';
+      if (submitButton) submitButton.textContent = 'Generar propuesta local';
     }
   } catch (error) {
-    state.innerHTML = '<strong>Estado:</strong> modo local gratuito disponible. No se pudo comprobar una IA generativa del servidor.';
+    iaEstado = 'local';
+    state.innerHTML = '<strong>Estado:</strong> modo local gratuito disponible. No se pudo comprobar una IA generativa del servidor; el texto no se enviará a ningún servicio.';
+    if (submitButton) submitButton.textContent = 'Generar propuesta local';
   }
 }
 
@@ -1488,13 +1576,17 @@ function copiarPromptIA() {
 
 function prepararChatGPT(event) {
   const intention = limpiarIntencionIA(document.getElementById('ai-intencion')?.value || '');
-  if (!intention) return;
   event.preventDefault();
+  if (!intention) {
+    agregarMensajeIA('assistant', 'Escribí una consulta antes de abrir ChatGPT. Esta página no puede enviar mensajes automáticamente a tu cuenta.');
+    document.getElementById('ai-intencion')?.focus();
+    return;
+  }
   const prompt = promptBusquedaIA(intention);
   const chatWindow = window.open('https://chatgpt.com/', '_blank', 'noopener,noreferrer');
   navigator.clipboard.writeText(prompt)
-    .then(() => showToast(chatWindow ? 'ChatGPT se abrió en otra pestaña. La instrucción quedó copiada para pegarla allí.' : 'La instrucción quedó copiada. Abrí ChatGPT y pegala allí.'))
-    .catch(() => window.prompt('Copiá esta instrucción en ChatGPT:', prompt));
+    .then(() => showToast(chatWindow ? 'ChatGPT se abrió. Pegá la instrucción copiada y presioná enviar allí.' : 'La instrucción quedó copiada. Abrí ChatGPT, pegala y presioná enviar.'))
+    .catch(() => window.prompt('Copiá esta instrucción en ChatGPT y presioná enviar:', prompt));
 }
 
 // ─── URL params (compartir búsqueda) ──────────────────────────────────────
