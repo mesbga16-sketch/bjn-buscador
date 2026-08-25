@@ -114,9 +114,12 @@ def _playwright_worker():
     }"""
 
     PAGINATION_JS = r"""() => {
-        const all     = Array.from(document.querySelectorAll('a, input[type="submit"], input[type="button"]'));
-        const nextEl  = all.find(el => /^(siguiente|>>|>)$/i.test((el.textContent || el.value || '').trim()));
-        const prevEl  = all.find(el => /^(anterior|<<|<)$/i.test((el.textContent || el.value || '').trim()));
+        const all = Array.from(document.querySelectorAll('a, input[type="submit"], input[type="button"]'));
+        const label = el => `${el.textContent || ''} ${el.value || ''} ${el.name || ''} ${el.id || ''}`.trim();
+        const nextEl = all.find(el => /^(siguiente|>>|>)$/i.test((el.textContent || el.value || '').trim())
+            || /(?:sigLink|siguiente|next)/i.test(label(el)));
+        const prevEl = all.find(el => /^(anterior|<<|<)$/i.test((el.textContent || el.value || '').trim())
+            || /(?:antLink|anterior|prev)/i.test(label(el)));
         const pageInfo = document.querySelector('.rf-ds-pg-cnt, [class*="pageCount"], [class*="pageInfo"]');
         return { hasNext: !!nextEl, hasPrev: !!prevEl,
                  pageText: pageInfo ? pageInfo.textContent.trim().replace(/\s+/g,' ') : '' };
@@ -124,6 +127,12 @@ def _playwright_worker():
 
     GO_PAGE_JS = """(pats) => {
         const all = Array.from(document.querySelectorAll('a, input[type="submit"], input[type="button"]'));
+        const direction = pats.includes('siguiente') ? 'next' : 'prev';
+        const names = direction === 'next'
+            ? /(?:sigLink|siguiente|next)/i
+            : /(?:antLink|anterior|prev)/i;
+        const byName = all.find(e => names.test(`${e.name || ''} ${e.id || ''}`));
+        if (byName) { byName.click(); return true; }
         for (const pat of pats) {
             const el = all.find(e => (e.textContent || e.value || '').trim().toLowerCase() === pat);
             if (el) { el.click(); return true; }
@@ -133,6 +142,18 @@ def _playwright_worker():
 
     # ── Funciones de búsqueda ─────────────────────────────────────────────────
 
+    # La página oficial del BJN muestra diez resultados por lote. Conservamos
+    # el número de página e índice originales para que el detalle siga apuntando
+    # a la sentencia correcta cuando se cargan varios lotes.
+    current_bjn_page = 0
+    last_search_data = {}
+
+    def tag_page_results(raw, page_number):
+        return [
+            {**result, '_bjn_page': page_number, '_bjn_index': index}
+            for index, result in enumerate(raw)
+        ]
+
     def wait_results(timeout_ms=25000):
         """Espera a que aparezcan links de resultados. No lanza excepción si no hay."""
         try:
@@ -141,6 +162,7 @@ def _playwright_worker():
             pass
 
     def do_search(data):
+        nonlocal current_bjn_page, last_search_data
         texto         = data.get('texto', '').strip()
         tipo_busqueda = data.get('tipoBusqueda', 'TODAS_LAS_PALABRAS')
         ordenar       = data.get('ordenar', 'RELEVANCIA')
@@ -194,20 +216,111 @@ def _playwright_worker():
 
         raw        = page.evaluate(EXTRACT_JS)
         pagination = page.evaluate(PAGINATION_JS)
+        if os.environ.get('BJN_DEBUG_PAGINATION'):
+            print('BJN_SEARCH', len(raw), raw[0].get('titulo') if raw else '', pagination, flush=True)
+        current_bjn_page = 1
+        last_search_data = dict(data)
         return raw, pagination
 
     def do_pagina(direction):
-        pats    = ['siguiente', '>>', '>'] if direction == 'next' else ['anterior', '<<', '<']
-        clicked = page.evaluate(GO_PAGE_JS, pats)
-        if not clicked:
-            raise ValueError('No hay más páginas.')
-        page.wait_for_timeout(2500)
-        wait_results()
-        raw        = page.evaluate(EXTRACT_JS)
-        pagination = page.evaluate(PAGINATION_JS)
-        return raw, pagination
+        nonlocal current_bjn_page
+        pats = ['siguiente', '>>', '>'] if direction == 'next' else ['anterior', '<<', '<']
+        selector = '#formResultados\\:sigLink' if direction == 'next' else '#formResultados\\:antLink'
+        previous_titles = set()
+        try:
+            previous_titles = {x.inner_text().strip() for x in page.locator('a[onclick*="lnkTituloSentencia"]').all()}
+        except Exception:
+            pass
 
-    def do_detalle(index):
+        raw = []
+        pagination = {}
+        changed = False
+        for attempt in range(3):
+            before = ''
+            try:
+                before = page.locator('a[onclick*="lnkTituloSentencia"]').first.inner_text().strip()
+            except Exception:
+                pass
+            try:
+                page.locator(selector).click(timeout=10000)
+                clicked = True
+            except Exception:
+                clicked = page.evaluate(GO_PAGE_JS, pats)
+            if not clicked:
+                raise ValueError('No hay más páginas.')
+
+            # El BJN actualiza la tabla mediante dos peticiones AJAX. Esperar
+            # un lote nuevo y estable evita capturar la respuesta intermedia.
+            if before:
+                deadline = time.monotonic() + 15000 / 1000
+                last_title = before
+                stable_since = None
+                while time.monotonic() < deadline:
+                    page.wait_for_timeout(500)
+                    try:
+                        current_title = page.locator('a[onclick*="lnkTituloSentencia"]').first.inner_text().strip()
+                    except Exception:
+                        current_title = ''
+                    if current_title and current_title != before:
+                        if current_title == last_title:
+                            if stable_since is None:
+                                stable_since = time.monotonic()
+                            if time.monotonic() - stable_since >= 3:
+                                break
+                        else:
+                            stable_since = None
+                        last_title = current_title
+                    else:
+                        stable_since = None
+            else:
+                page.wait_for_timeout(2500)
+
+            wait_results()
+            raw = page.evaluate(EXTRACT_JS)
+            pagination = page.evaluate(PAGINATION_JS)
+            current_titles = {x.get('titulo', '').strip() for x in raw}
+            changed = bool(current_titles) and bool(current_titles - previous_titles)
+            if changed:
+                break
+            if os.environ.get('BJN_DEBUG_PAGINATION'):
+                print('BJN_PAGE_RETRY', direction, attempt + 1, len(raw), raw[0].get('titulo') if raw else '', flush=True)
+            page.wait_for_timeout(1000)
+
+        if not changed:
+            # No devolver el mismo lote como si fuera otra página.
+            raise RuntimeError('El BJN no devolvió un lote de resultados distinto.')
+        current_bjn_page = current_bjn_page + 1 if direction == 'next' else max(1, current_bjn_page - 1)
+        if os.environ.get('BJN_DEBUG_PAGINATION'):
+            print('BJN_PAGE', direction, len(raw), raw[0].get('titulo') if raw else '', pagination, flush=True)
+        return tag_page_results(raw, current_bjn_page), pagination
+
+    def do_search_pages(data):
+        try:
+            requested = int(data.get('paginas', 1))
+        except (TypeError, ValueError):
+            requested = 1
+        requested = max(1, min(5, requested))
+        raw, pagination = do_search(data)
+        results = tag_page_results(raw, 1)
+        loaded = 1
+        while loaded < requested and pagination.get('hasNext'):
+            raw, pagination = do_pagina('next')
+            loaded += 1
+            results.extend(raw)
+        return results, pagination, loaded
+
+    def do_detalle(index, page_number=None):
+        nonlocal current_bjn_page
+        try:
+            target_page = max(1, int(page_number or current_bjn_page or 1))
+        except (TypeError, ValueError):
+            target_page = current_bjn_page or 1
+        if target_page != current_bjn_page:
+            if not last_search_data:
+                raise ValueError('No hay una búsqueda activa para recuperar esta sentencia.')
+            do_search(last_search_data)
+            for _ in range(1, target_page):
+                do_pagina('next')
         """
         Obtiene el texto completo de la sentencia en la posición 'index'.
 
@@ -422,22 +535,24 @@ def _playwright_worker():
             if t == 'status':
                 _finish_job(jid, result={'ok': True})
             elif t == 'search':
-                raw, pagination = do_search(task['data'])
+                raw, pagination, pages_loaded = do_search_pages(task['data'])
                 results = process_raw_results(raw)
                 _finish_job(jid, result={
                     'results': results, 'total': len(results),
                     'query': task['data'].get('texto', ''),
-                    'pagination': pagination
+                    'pagination': pagination,
+                    'pages_loaded': pages_loaded,
                 })
             elif t == 'pagina':
                 raw, pagination = do_pagina(task['direction'])
                 results = process_raw_results(raw)
                 _finish_job(jid, result={
                     'results': results, 'total': len(results),
-                    'pagination': pagination
+                    'pagination': pagination,
+                    'pages_loaded': current_bjn_page,
                 })
             elif t == 'detalle':
-                res = do_detalle(task['index'])
+                res = do_detalle(task['index'], task.get('page'))
                 _finish_job(jid, result=res)
             elif t == 'verificar':
                 citas = do_verificar(task['texto'])
