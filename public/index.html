@@ -67,7 +67,7 @@
 
   .filters-row {
     display: grid;
-    grid-template-columns: 1fr 1fr 1fr;
+    grid-template-columns: repeat(4, 1fr);
     gap: 10px 16px;
     margin-top: 12px;
   }
@@ -483,6 +483,16 @@
           <option value="FECHA_ASCENDENTE">Fecha (más antigua)</option>
         </select>
       </div>
+      <div class="field">
+        <label for="s-paginas">Resultados iniciales</label>
+        <select id="s-paginas" title="Cantidad de resultados que se cargarán al iniciar la búsqueda">
+          <option value="1">10 resultados</option>
+          <option value="2" selected>20 resultados</option>
+          <option value="3">30 resultados</option>
+          <option value="4">40 resultados</option>
+          <option value="5">50 resultados</option>
+        </select>
+      </div>
       <label class="checkbox-field" for="s-sinonimos">
         <input type="checkbox" id="s-sinonimos">
         <span>Incluir sinónimos</span>
@@ -676,6 +686,7 @@ function histAdd(payload) {
     tipo:         payload.tipoBusqueda,
     tipoSentencia: payload.tipoSentencia || '',
     ordenar:      payload.ordenar,
+    paginas:      Number(payload.paginas || 2),
     sinonimos:    Boolean(payload.sinonimos),
     ts:           Date.now()
   });
@@ -706,6 +717,7 @@ function histApply(idx) {
   document.getElementById('s-tipo').value           = item.tipo  || 'TODAS_LAS_PALABRAS';
   document.getElementById('s-tipo-sentencia').value = item.tipoSentencia || '';
   document.getElementById('s-ordenar').value        = item.ordenar || 'RELEVANCIA';
+  document.getElementById('s-paginas').value        = String(item.paginas || 2);
   document.getElementById('s-sinonimos').checked     = Boolean(item.sinonimos);
   buscar();
 }
@@ -728,6 +740,7 @@ function buildPayload() {
     tipoBusqueda:  document.getElementById('s-tipo').value,
     tipoSentencia: document.getElementById('s-tipo-sentencia').value,
     ordenar:       document.getElementById('s-ordenar').value,
+    paginas:       Number(document.getElementById('s-paginas')?.value || 2),
     sinonimos:     document.getElementById('s-sinonimos').checked,
   };
 }
@@ -738,6 +751,7 @@ function payloadToParams(p) {
   if (p.tipoBusqueda && p.tipoBusqueda !== 'TODAS_LAS_PALABRAS') params.set('t', p.tipoBusqueda);
   if (p.tipoSentencia) params.set('ts', p.tipoSentencia);
   if (p.ordenar && p.ordenar !== 'RELEVANCIA') params.set('o', p.ordenar);
+  if (p.paginas && Number(p.paginas) !== 2) params.set('p', String(p.paginas));
   if (p.sinonimos) params.set('s', '1');
   return params;
 }
@@ -753,6 +767,7 @@ function sameSearch(a, b) {
     && a.tipoBusqueda === b.tipoBusqueda
     && (a.tipoSentencia || '') === (b.tipoSentencia || '')
     && a.ordenar === b.ordenar
+    && Number(a.paginas || 2) === Number(b.paginas || 2)
     && Boolean(a.sinonimos) === Boolean(b.sinonimos);
 }
 
@@ -797,6 +812,7 @@ function loadFromParams() {
   document.getElementById('s-tipo').value           = params.get('t') || 'TODAS_LAS_PALABRAS';
   document.getElementById('s-tipo-sentencia').value = params.get('ts') || '';
   document.getElementById('s-ordenar').value       = params.get('o') || 'RELEVANCIA';
+  document.getElementById('s-paginas').value       = params.get('p') || '2';
   document.getElementById('s-sinonimos').checked     = params.get('s') === '1';
   const payload = buildPayload();
   if (restoreCachedResults(payload)) return;
@@ -1068,6 +1084,9 @@ function renderResults(data) {
   if (filtroTipo && totalOriginal !== total) {
     countHtml += ` <span style="color:#6b7280; font-size:12px;">(${totalOriginal} sin filtro de tipo)</span>`;
   }
+  if (Number(data.pages_loaded || 1) > 1) {
+    countHtml += ` <span style="color:#6b7280; font-size:12px;">(${data.pages_loaded} páginas del BJN cargadas)</span>`;
+  }
   count.innerHTML = countHtml;
   list.innerHTML  = '';
 
@@ -1089,11 +1108,13 @@ function renderResults(data) {
       card.setAttribute('role', 'button');
       card.setAttribute('tabindex', '0');
       card.setAttribute('aria-label', `Abrir sentencia ${r.numero || 'sin número'}`);
-      card.onclick   = () => cargarDetalle(data.results.indexOf(r), card);
+      const sourceIndex = Number.isInteger(r._bjn_index) ? r._bjn_index : data.results.indexOf(r);
+      const sourcePage = Number.isInteger(r._bjn_page) ? r._bjn_page : 1;
+      card.onclick   = () => cargarDetalle(sourceIndex, card, sourcePage);
       card.onkeydown = (event) => {
         if (event.key === 'Enter' || event.key === ' ') {
           event.preventDefault();
-          cargarDetalle(data.results.indexOf(r), card);
+          cargarDetalle(sourceIndex, card, sourcePage);
         }
       };
 
@@ -1126,7 +1147,7 @@ function renderResults(data) {
 
 // ─── Detalle ───────────────────────────────────────────────────────────────
 
-async function cargarDetalle(index, cardEl) {
+async function cargarDetalle(index, cardEl, pageNumber = 1) {
   document.querySelectorAll('.result-card').forEach(c => c.classList.remove('selected'));
   if (cardEl) cardEl.classList.add('selected');
 
@@ -1134,7 +1155,7 @@ async function cargarDetalle(index, cardEl) {
   _detailAbort = new AbortController();
   const detailGen = ++_detailGen;
   const detailSignal = _detailAbort.signal;
-  const payload = { index };
+  const payload = { index, page: pageNumber };
 
   // Mostrar panel de carga INMEDIATAMENTE y hacer scroll hacia él
   const panel = document.getElementById('detail-panel');
