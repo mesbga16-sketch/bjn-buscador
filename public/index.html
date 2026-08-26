@@ -2024,7 +2024,6 @@ async function cambiarPagina(direction) {
     setStatus('', '');
     cacheResults(ultimaBusqueda, data);
     renderResults(data);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
   } catch (e) {
     setStatus('Error: ' + e.message, 'error');
   }
@@ -2218,6 +2217,11 @@ function renderResults(data) {
   }
 
   area.style.display = 'block';
+  // Al terminar una búsqueda, mostrar los resultados primero en la ventana.
+  // Las herramientas auxiliares siguen disponibles debajo del lote del BJN.
+  requestAnimationFrame(() => {
+    area.scrollIntoView({ behavior: 'auto', block: 'start' });
+  });
   renderWorkspace();
   renderPagination(data.pagination);
 }
