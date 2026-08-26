@@ -674,6 +674,9 @@
     <!-- Historial -->
     <div id="history-simple" class="history-bar"></div>
 
+    <!-- Los resultados se colocan acá al finalizar una búsqueda -->
+    <div id="results-slot" aria-live="polite"></div>
+
   <!-- Búsqueda opcional en archivos del equipo -->
   <details class="tool-panel local-folder-tool" id="local-files-panel" open>
     <summary class="optional-filter-summary">
@@ -1034,6 +1037,14 @@ function histRemove(idx) {
 // valor inicial para que pueda elegir nuevamente entre 10 y 50 resultados.
 // No se ejecuta al restaurar una URL ni al aplicar una búsqueda del historial,
 // porque esas rutas asignan el valor deliberadamente antes de buscar.
+function colocarResultadosBajoHistorial() {
+  const slot = document.getElementById('results-slot');
+  const area = document.getElementById('results-area');
+  if (slot && area && area.parentElement !== slot) {
+    slot.appendChild(area);
+  }
+}
+
 function prepararNuevaBusqueda() {
   const campoTexto = document.getElementById('s-texto');
   const selectorPaginas = document.getElementById('s-paginas');
@@ -2370,6 +2381,7 @@ function toggleInstrucciones() {
 
 // Cargar organización local y búsqueda desde URL si existe (enlace compartido).
 window.addEventListener('DOMContentLoaded', () => {
+  colocarResultadosBajoHistorial();
   renderWorkspace();
   actualizarEstadoIA();
   loadFromParams();
