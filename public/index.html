@@ -1788,12 +1788,12 @@ async function actualizarEstadoIA() {
       state.innerHTML = '<strong>Estado:</strong> IA generativa del servidor habilitada. La clave queda protegida en el servidor; no se solicitan credenciales al usuario.';
       if (submitButton) submitButton.textContent = 'Consultar IA generativa';
     } else {
-      state.innerHTML = '<strong>Estado:</strong> modo local gratuito. Al usar el botón no se envía el texto a ningún servicio; podés abrir ChatGPT, Claude o Gemini aparte con una instrucción copiada.';
+      state.innerHTML = '<strong>Estado:</strong> modo local gratuito. Al usar el botón no se envía el texto a ningún servicio; podés abrir ChatGPT, Claude, Gemini o NotebookLM aparte con una instrucción copiada.';
       if (submitButton) submitButton.textContent = 'Preparar búsqueda local';
     }
   } catch (error) {
     iaEstado = 'local';
-    state.innerHTML = '<strong>Estado:</strong> modo local gratuito disponible. No se pudo comprobar una IA generativa del servidor; el texto no se enviará a ningún servicio. Podés usar ChatGPT, Claude o Gemini mediante copia y pegado manual.';
+    state.innerHTML = '<strong>Estado:</strong> modo local gratuito disponible. No se pudo comprobar una IA generativa del servidor; el texto no se enviará a ningún servicio. Podés usar ChatGPT, Claude, Gemini o NotebookLM mediante copia y pegado manual.';
     if (submitButton) submitButton.textContent = 'Preparar búsqueda local';
   }
 }
