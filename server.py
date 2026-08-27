@@ -158,6 +158,17 @@ def _playwright_worker():
     current_bjn_page = 0
     last_search_data = {}
 
+    def normalize_bjn_query(value):
+        """Normaliza espacios y Unicode sin alterar las palabras de la consulta."""
+        text = unicodedata.normalize('NFKC', str(value or '')).replace('\u00a0', ' ')
+        return re.sub(r'\s+', ' ', text).strip()
+
+    def result_identity(result):
+        """Identidad estable para no repetir una sentencia entre lotes solapados."""
+        titulo = normalize_bjn_query(result.get('titulo', '')).casefold()
+        numero = normalize_bjn_query(result.get('numero', '')).casefold()
+        return numero or titulo
+
     def tag_page_results(raw, page_number):
         return [
             {**result, '_bjn_page': page_number, '_bjn_index': index}
@@ -173,7 +184,7 @@ def _playwright_worker():
 
     def do_search(data):
         nonlocal current_bjn_page, last_search_data
-        texto         = data.get('texto', '').strip()
+        texto         = normalize_bjn_query(data.get('texto', ''))
         tipo_busqueda = data.get('tipoBusqueda', 'TODAS_LAS_PALABRAS')
         ordenar       = data.get('ordenar', 'RELEVANCIA')
         sinonimos     = bool(data.get('sinonimos', False))
@@ -311,13 +322,24 @@ def _playwright_worker():
             requested = 1
         requested = max(1, min(5, requested))
         raw, pagination = do_search(data)
-        results = tag_page_results(raw, 1)
+        results = []
+        seen = set()
+
+        def append_unique(items):
+            for item in items:
+                identity = result_identity(item)
+                if identity in seen:
+                    continue
+                seen.add(identity)
+                results.append(item)
+
+        append_unique(tag_page_results(raw, 1))
         loaded = 1
         pagination_warning = None
         while loaded < requested and pagination.get('hasNext'):
             try:
                 raw, pagination = do_pagina('next')
-            except Exception as exc:
+            except Exception:
                 # El BJN puede tardar o devolver dos veces el mismo lote al
                 # actualizar la tabla por AJAX. No perder el primer lote válido:
                 # se entrega lo encontrado y se informa que la paginación quedó
@@ -329,7 +351,7 @@ def _playwright_worker():
                 )
                 break
             loaded += 1
-            results.extend(raw)
+            append_unique(raw)
         return results, pagination, loaded, pagination_warning
 
 
