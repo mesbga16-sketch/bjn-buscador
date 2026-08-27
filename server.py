@@ -313,11 +313,25 @@ def _playwright_worker():
         raw, pagination = do_search(data)
         results = tag_page_results(raw, 1)
         loaded = 1
+        pagination_warning = None
         while loaded < requested and pagination.get('hasNext'):
-            raw, pagination = do_pagina('next')
+            try:
+                raw, pagination = do_pagina('next')
+            except Exception as exc:
+                # El BJN puede tardar o devolver dos veces el mismo lote al
+                # actualizar la tabla por AJAX. No perder el primer lote válido:
+                # se entrega lo encontrado y se informa que la paginación quedó
+                # incompleta. El botón Siguiente permanece disponible para reintentar.
+                pagination_warning = (
+                    f'Se entregó el primer lote ({len(results)} resultado(s)); '
+                    'la carga de más páginas no se pudo confirmar todavía. '
+                    'Los resultados mostrados son válidos.'
+                )
+                break
             loaded += 1
             results.extend(raw)
-        return results, pagination, loaded
+        return results, pagination, loaded, pagination_warning
+
 
     def do_detalle(index, page_number=None):
         nonlocal current_bjn_page
@@ -545,14 +559,17 @@ def _playwright_worker():
             if t == 'status':
                 _finish_job(jid, result={'ok': True})
             elif t == 'search':
-                raw, pagination, pages_loaded = do_search_pages(task['data'])
+                raw, pagination, pages_loaded, pagination_warning = do_search_pages(task['data'])
                 results = process_raw_results(raw)
-                _finish_job(jid, result={
+                result = {
                     'results': results, 'total': len(results),
                     'query': task['data'].get('texto', ''),
                     'pagination': pagination,
                     'pages_loaded': pages_loaded,
-                })
+                }
+                if pagination_warning:
+                    result['pagination_warning'] = pagination_warning
+                _finish_job(jid, result=result)
             elif t == 'pagina':
                 raw, pagination = do_pagina(task['direction'])
                 results = process_raw_results(raw)
