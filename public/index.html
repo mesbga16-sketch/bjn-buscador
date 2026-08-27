@@ -1830,14 +1830,24 @@ function copiarPromptIA() {
 function prepararProveedorIA(event, proveedor) {
   const intention = limpiarIntencionIA(document.getElementById('ai-intencion')?.value || '');
   event.preventDefault();
-  const urls = { ChatGPT: 'https://chatgpt.com/', Claude: 'https://claude.ai/', Gemini: 'https://gemini.google.com/' };
+  const urls = {
+    ChatGPT: 'https://chatgpt.com/',
+    Claude: 'https://claude.ai/',
+    Gemini: 'https://gemini.google.com/',
+    NotebookLM: 'https://notebooklm.google.com/'
+  };
   if (!intention) {
     agregarMensajeIA('assistant', `Escribí una consulta antes de abrir ${proveedor}. Esta página no puede enviar mensajes automáticamente a una cuenta externa.`);
     document.getElementById('ai-intencion')?.focus();
     return;
   }
   const prompt = promptBusquedaIA(intention);
-  const providerWindow = window.open(urls[proveedor] || urls.ChatGPT, '_blank', 'noopener,noreferrer');
+  const providerUrl = urls[proveedor];
+  if (!providerUrl) {
+    agregarMensajeIA('assistant', `No se reconoció el proveedor ${proveedor}. Elegí uno de los accesos disponibles.`);
+    return;
+  }
+  const providerWindow = window.open(providerUrl, '_blank', 'noopener,noreferrer');
   navigator.clipboard.writeText(prompt)
     .then(() => showToast(providerWindow ? `${proveedor} se abrió. Pegá la instrucción copiada y presioná enviar allí.` : `La instrucción quedó copiada. Abrí ${proveedor}, pegala y presioná enviar.`))
     .catch(() => window.prompt(`Copiá esta instrucción en ${proveedor} y presioná enviar:`, prompt));
