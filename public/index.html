@@ -2382,9 +2382,19 @@ function toggleInstrucciones() {
 
 // ─── Inicialización ────────────────────────────────────────────────────────
 
+function colocarCarpetaDebajoDeFiltros() {
+  const carpeta = document.getElementById('local-files-panel');
+  const filtros = document.getElementById('advanced-filters');
+  if (!carpeta || !filtros || carpeta.parentElement !== filtros.parentElement) return;
+  if (filtros.nextElementSibling !== carpeta) {
+    filtros.parentElement.insertBefore(carpeta, filtros.nextElementSibling);
+  }
+}
+
 // Cargar organización local y búsqueda desde URL si existe (enlace compartido).
 window.addEventListener('DOMContentLoaded', () => {
   colocarResultadosBajoHistorial();
+  colocarCarpetaDebajoDeFiltros();
   renderWorkspace();
   actualizarEstadoIA();
   loadFromParams();
