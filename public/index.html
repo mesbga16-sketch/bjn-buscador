@@ -814,6 +814,7 @@
     </summary>
     <div class="tool-body">
       <p class="tool-help"><strong>Elegí si querés usarlo.</strong> Es una ayuda para transformar una descripción en lenguaje común (por ejemplo, “despido de trabajador enfermo”) en una búsqueda más ordenada. No decide el caso, no afirma cuál es la solución jurídica y no reemplaza la lectura de las sentencias.</p>
+       <p class="notice-soft"><strong>Antes de abrir una herramienta de IA:</strong> escribí una instrucción en el recuadro <em>Tu consulta para el asistente</em>. Los accesos a ChatGPT, Claude, Gemini y NotebookLM solo se abren cuando ese recuadro contiene una instrucción. Si está vacío, no se abre ningún proveedor.</p>
       <div class="ai-purpose"><strong>¿Qué hace “Preparar búsqueda local”?</strong> Trabaja dentro de este navegador: elimina palabras de relleno, detecta años, agrega términos relacionados que ya están definidos en la herramienta y arma una propuesta revisable. Después podés cargarla en el buscador principal y decidir si presionás <em>Buscar</em>. <strong>No ejecuta la consulta por sí sola y no envía el texto a ningún servicio.</strong></div>
       <div class="ai-chat" id="ai-chat" aria-live="polite">
         <div class="ai-message ai-message-assistant">Podés describir el tema que necesitás investigar. Te devolveré una propuesta revisable para el buscador.</div>
@@ -834,7 +835,7 @@
         <a class="btn btn-secondary" href="https://gemini.google.com/" target="_blank" rel="noopener noreferrer" onclick="prepararProveedorIA(event, 'Gemini')">Abrir Gemini y copiar instrucción</a>
         <a class="btn btn-secondary" href="https://notebooklm.google.com/" target="_blank" rel="noopener noreferrer" onclick="prepararProveedorIA(event, 'NotebookLM')">Abrir NotebookLM y copiar instrucción</a>
       </div>
-      <p class="ai-next-step"><strong>Cómo se usan:</strong> la herramienta copia una instrucción limpia, abre el proveedor elegido en otra pestaña y deja el último paso (pegar y enviar) en manos de la persona. No se solicitan contraseñas ni claves de API.</p>
+      <p class="ai-next-step"><strong>Cómo se usan:</strong> primero escribí la instrucción en <em>Tu consulta para el asistente</em>. Después elegí ChatGPT, Claude, Gemini o NotebookLM. La herramienta copia una instrucción limpia, abre el proveedor elegido en otra pestaña y deja el último paso (pegar y enviar) en manos de la persona. Si el recuadro está vacío, no abre la herramienta. No se solicitan contraseñas ni claves de API.</p>
       <div class="notice-soft" id="ai-state" role="status" aria-live="polite"><strong>Estado:</strong> comprobando las opciones de IA disponibles...</div>
       <div id="ai-suggestion" class="tool-status" role="status" aria-live="polite"></div>
     </div>
