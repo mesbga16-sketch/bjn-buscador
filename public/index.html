@@ -544,6 +544,59 @@
     .filters-row { grid-template-columns: 1fr; }
   }
 
+  /* Legibilidad ampliada para lectura cómoda en teléfonos y computadoras */
+  body { font-size: 15px; line-height: 1.45; }
+  header { padding-top: 16px; padding-bottom: 16px; }
+  header h1 { font-size: 20px; line-height: 1.3; }
+  .search-panel { padding: 20px 22px; }
+  .search-heading strong { font-size: 16px; }
+  .search-heading span { font-size: 14px; }
+  label { font-size: 13px; letter-spacing: 0.3px; }
+  input[type="text"], input[type="search"], input[type="number"], input[type="date"], select {
+    min-height: 44px;
+    padding: 10px 12px;
+    font-size: 16px;
+  }
+  textarea { min-height: 96px; padding: 10px 12px; font-size: 16px; }
+  .btn { min-height: 44px; padding: 10px 18px; font-size: 16px; }
+  .btn-icon, .page-btn { min-height: 42px; font-size: 14px; }
+  .checkbox-field { min-height: 44px; font-size: 15px; }
+  .checkbox-field input, .result-select-label input { width: 20px; height: 20px; }
+  .bjn-link { font-size: 14px; }
+  .history-label { font-size: 13px; }
+  .history-chip { font-size: 13px; padding: 6px 10px; max-width: 100%; }
+  .results-header { font-size: 15px; }
+  .result-card { padding: 14px 16px; }
+  .result-proceso { font-size: 14px; }
+  .result-extracto { font-size: 15px; line-height: 1.65; }
+  .badge { font-size: 12px; }
+  .detail-title { font-size: 18px; }
+  .detail-meta { font-size: 13px; }
+  .detail-body { font-size: 16px; line-height: 1.75; }
+  .tool-panel summary { font-size: 16px; padding: 14px; }
+  .tool-help, .workspace-scope, .folder-choice-note, .tool-status, .ai-status-line, .ai-next-step { font-size: 14px; }
+  .tool-grid input[type="date"] { min-height: 44px; font-size: 16px; }
+  .optional-badge { font-size: 13px; }
+  .workspace-item, .local-file-result { font-size: 14px; }
+  .ai-message { font-size: 15px; }
+  .local-folder-state, .notice-soft { font-size: 14px; }
+  .result-select-label { font-size: 13px; }
+
+  @media (max-width: 640px) {
+    header { padding: 12px 14px; }
+    header h1 { font-size: 18px; }
+    .container { padding: 12px 10px; }
+    .search-panel { padding: 14px 12px; }
+    .instrucciones-titulo { padding: 12px 14px; font-size: 15px; }
+    .instrucciones-grid { padding: 12px 14px; }
+    .instruccion-item { font-size: 14px; }
+    .tool-body { padding: 12px; }
+    .results-header { margin-top: 14px; }
+    .result-card { padding: 13px 12px; }
+    .result-extracto { font-size: 15px; }
+    .header-links { gap: 6px 12px; }
+  }
+
 </style>
 </head>
 <body>
