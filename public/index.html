@@ -2161,6 +2161,9 @@ function renderResults(data) {
   if (Number(data.pages_loaded || 1) > 1) {
     countHtml += ` <span style="color:#6b7280; font-size:12px;">(${data.pages_loaded} páginas del BJN cargadas)</span>`;
   }
+  if (data.pagination_warning) {
+    countHtml += `<div class="partial-results-note" role="status">${escapeHtml(data.pagination_warning)} Podés usar <strong>Siguiente</strong> para reintentar.</div>`;
+  }
   count.innerHTML = countHtml;
   list.innerHTML  = '';
 
