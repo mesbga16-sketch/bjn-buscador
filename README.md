@@ -14,6 +14,7 @@ Herramienta de acceso no oficial a la [Base de Jurisprudencia Nacional pública 
 | Accesibilidad | Se agregaron etiquetas asociadas a campos, estados ARIA, foco visible, navegación por teclado en las tarjetas y roles para los controles interactivos. |
 | MCP | Los dos servidores MCP ahora envían los nombres de campos que espera la API, admiten sinónimos y pueden recibir `BJN_BASE_URL` por variable de entorno. |
 | Pruebas | Se agregaron pruebas unitarias para extracción, orden, deduplicación y clasificación de citas. |
+| Smoke test | GitHub Actions comprueba cada hora la disponibilidad de las tres instancias, la coincidencia entre la segunda tarjeta y su detalle, y falla ante respuestas HTTP 5xx. También puede iniciarse manualmente desde Actions. |
 
 ## Ejecución local
 
@@ -33,6 +34,14 @@ Para ejecutar las pruebas:
 python3 -m py_compile server.py citations.py mcp/server.py mcp_server.py
 python3 -m unittest discover -s tests -v
 ```
+
+Para comprobar las instancias públicas mediante el smoke test:
+
+```bash
+python3 scripts/render_smoke_test.py
+```
+
+La automatización de GitHub Actions se ejecuta cada hora, a los 17 minutos, y permite una ejecución manual. Si la prueba detecta un estado no saludable, un HTTP 5xx o una diferencia entre la segunda sentencia seleccionada y el detalle abierto, el workflow termina en fallo y GitHub Actions lo marca en la pestaña Actions.
 
 ## Despliegue en Render
 
