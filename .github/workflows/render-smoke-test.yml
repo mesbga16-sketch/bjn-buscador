@@ -16,7 +16,7 @@ concurrency:
 jobs:
   smoke-test:
     name: Verify all public BJN instances
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
       - name: Check out repository
