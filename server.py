@@ -997,7 +997,13 @@ def detalle():
         return jsonify({'error': 'El índice de la sentencia no es válido.'}), 400
     if index < 0:
         return jsonify({'error': 'El índice de la sentencia no es válido.'}), 400
-    jid = _submit_job({'type': 'detalle', 'index': index})
+    try:
+        page = int(data.get('page', 1))
+    except (TypeError, ValueError):
+        return jsonify({'error': 'La página de la sentencia no es válida.'}), 400
+    if page < 1:
+        return jsonify({'error': 'La página de la sentencia no es válida.'}), 400
+    jid = _submit_job({'type': 'detalle', 'index': index, 'page': page})
     return jsonify({'job_id': jid})
 
 @app.route('/api/verificar', methods=['POST'])
